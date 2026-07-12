@@ -197,7 +197,6 @@
 
     <div class="card">
       <h2>쿠팡 재적 마스터리스트 <span class="eyebrow">보조 도구</span></h2>
-      <p class="sub">상차리스트에는 이미 PLT 값이 입력되어 있으므로 <b>대부분의 상품은 이 리스트가 없어도 그대로 계산됩니다.</b> 다만 여기 등록된 상품코드가 상차리스트에 나오면, 입력된 PLT를 무시하고 <b>수량(낱개수) ÷ 쿠팡박스수/PLT</b>로 자동 재계산해서 덮어씁니다.</p>
       <div class="row" style="margin-bottom:14px;">
         <button class="btn btn-dark btn-sm" onclick="addMasterRow()">+ 행 추가</button>
         <button class="btn btn-ghost btn-sm" onclick="toggleImportBox()">엑셀 붙여넣기로 가져오기</button>
@@ -238,7 +237,6 @@
     <div id="calc-input-view">
       <div class="card">
         <h2>상차리스트 입력</h2>
-        <p class="sub">엑셀에서 표 전체(헤더 제외하고 데이터만)를 복사한 뒤, 아래 표 아무 칸이나 클릭하고 <code class="k">Ctrl+V</code>로 붙여넣으세요. 열 순서: <code class="k">상품코드 · 상품명 · 188바코드 · 88바코드 · 수량(낱개 수) · PLT</code><br>PLT 값은 입력하신 그대로 사용합니다. 단, 상품코드가 재적 마스터리스트에 등록되어 있으면 자동으로 재계산해서 덮어씁니다.</p>
         <div class="table-wrap" style="max-height:420px; overflow-y:auto; border:1px solid var(--line); border-radius:10px;">
           <table id="ship-grid-table">
             <thead>
