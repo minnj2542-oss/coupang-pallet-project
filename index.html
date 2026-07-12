@@ -6,7 +6,6 @@
 <title>Coupang Supplier Hub · 트럭적재 자동구성</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
     --bg:#F7F7F8;
@@ -241,15 +240,27 @@
 
     <div class="card">
       <h2>상차리스트 입력</h2>
-      <p class="sub">이번 트럭에 실을 상품 리스트를 붙여넣거나 엑셀 파일을 업로드하세요. 열 순서: <code class="k">상품코드 · 상품명 · 188바코드 · 88바코드 · 수량(박스수) · PLT</code><br>PLT 값은 입력하신 그대로 사용합니다. 단, 상품코드가 재적 마스터리스트에 등록되어 있으면 자동으로 재계산해서 덮어씁니다.</p>
-      <div class="row" style="margin-bottom:10px;">
-        <input type="file" id="ship-file" accept=".xlsx,.xls,.csv" onchange="handleShipFile(event)">
-        <span style="color:var(--ink-soft); font-size:12px;">또는 아래에 붙여넣기 ↓</span>
+      <p class="sub">엑셀에서 표 전체(헤더 제외하고 데이터만)를 복사한 뒤, 아래 표 아무 칸이나 클릭하고 <code class="k">Ctrl+V</code>로 붙여넣으세요. 열 순서: <code class="k">상품코드 · 상품명 · 188바코드 · 88바코드 · 수량(박스수) · PLT</code><br>PLT 값은 입력하신 그대로 사용합니다. 단, 상품코드가 재적 마스터리스트에 등록되어 있으면 자동으로 재계산해서 덮어씁니다.</p>
+      <div class="table-wrap" style="max-height:420px; overflow-y:auto; border:1px solid var(--line); border-radius:10px;">
+        <table id="ship-grid-table">
+          <thead>
+            <tr>
+              <th style="width:34px; text-align:center;">#</th>
+              <th style="width:100px;">상품코드</th>
+              <th>상품명</th>
+              <th style="width:130px;">188바코드</th>
+              <th style="width:110px;">88바코드</th>
+              <th style="width:90px;">수량(박스수)</th>
+              <th style="width:80px;">PLT</th>
+            </tr>
+          </thead>
+          <tbody id="ship-grid-tbody"></tbody>
+        </table>
       </div>
-      <textarea id="ship-paste" placeholder="상품코드	상품명	188바코드	88바코드	수량(박스수)	PLT&#10;425562	옛날돈까스소스	18801955033179	8801953033172	1	0.01"></textarea>
       <div class="row" style="margin-top:10px;">
-        <button class="btn btn-primary btn-sm" onclick="importShipPaste()">상차리스트 불러오기</button>
-        <button class="btn btn-ghost btn-sm" onclick="clearShipment()">비우기</button>
+        <button class="btn btn-primary btn-sm" onclick="importShipGrid()">상차리스트 불러오기</button>
+        <button class="btn btn-ghost btn-sm" onclick="addGridRows(20)">+ 20행 추가</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearShipGrid()">표 비우기</button>
         <span class="toolbar-right note" id="ship-count-note"></span>
       </div>
     </div>
@@ -306,6 +317,9 @@
 const MASTER_KEY = 'master-list';
 let master = [];   // {id, code, name, ownBox, cpBox}  cpBox는 "48 (8방 * 6단)" 같은 원문 텍스트, 숫자는 cpBoxNum()으로 추출
 let shipment = [];  // {code, name, b188, b88, qty, plt}  qty는 박스수, plt는 입력된 PLT값(마스터 미등록 상품은 이 값을 그대로 사용)
+const GRID_COLS = ['code','name','b188','b88','qty','plt'];
+const GRID_INITIAL_ROWS = 30;
+let shipGrid = [];  // 엑셀 붙여넣기용 스프레드시트 그리드. [{code,name,b188,b88,qty,plt}, ...] (문자열 상태 그대로 보관)
 let productAgg = [];
 let overrideItems = [];   // 마스터 등록으로 인해 PLT가 재계산된 상품 목록 (표시용)
 let missingPltItems = []; // PLT 값도 없고 마스터에도 없어 계산에서 제외된 상품 목록
@@ -452,50 +466,78 @@ function importMasterPaste(){
   flash(`가져오기 완료: 신규 ${added}건 / 갱신 ${updated}건`);
 }
 
-/* ---------------- shipment import ---------------- */
-function importShipPaste(){
-  const text = document.getElementById('ship-paste').value;
-  if(!text.trim()){ flash('붙여넣을 내용이 없습니다'); return; }
-  let rows = splitRows(text);
-  if(rows.length && /상품코드/.test(rows[0][0]||'')){ rows = rows.slice(1); }
-  shipment = rows.filter(c=>c[0]).map(c=>{
-    const [code,name,b188,b88,qty,plt] = c;
-    return { code:code||'', name:name||'', b188:b188||'', b88:b88||'', qty: qty? Number(qty):0, plt: plt||'' };
-  });
-  renderShipment();
-  flash(`상차리스트 ${shipment.length}건 불러옴`);
+/* ---------------- shipment grid (엑셀 붙여넣기용 스프레드시트) ---------------- */
+function emptyGridRow(){ return {code:'', name:'', b188:'', b88:'', qty:'', plt:''}; }
+
+function initShipGrid(){
+  shipGrid = Array.from({length:GRID_INITIAL_ROWS}, emptyGridRow);
+  renderShipGrid();
 }
-function clearShipment(){
-  shipment=[]; renderShipment();
+function addGridRows(n){
+  for(let i=0;i<n;i++) shipGrid.push(emptyGridRow());
+  renderShipGrid();
+}
+function clearShipGrid(){
+  initShipGrid();
+  shipment = [];
+  renderShipment();
   document.getElementById('results-wrap').style.display='none';
   document.getElementById('override-card').style.display='none';
   document.getElementById('missingplt-card').style.display='none';
+  flash('표를 비웠습니다');
 }
-function handleShipFile(evt){
-  const file = evt.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = (e)=>{
-    try{
-      const wb = XLSX.read(e.target.result, {type:'array'});
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      let rows = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
-      rows = rows.filter(r=> r.some(c=>String(c).trim()!==''));
-      if(rows.length && /상품코드/.test(String(rows[0][0]||''))){ rows = rows.slice(1); }
-      shipment = rows.map(c=>{
-        const [code,name,b188,b88,qty,plt] = c;
-        return { code:String(code||'').trim(), name:String(name||'').trim(),
-                 b188:String(b188||'').trim(), b88:String(b88||'').trim(),
-                 qty: Number(qty)||0, plt: String(plt??'').trim() };
-      }).filter(r=>r.code);
-      renderShipment();
-      flash(`엑셀에서 ${shipment.length}건 불러옴`);
-    }catch(err){
-      console.error(err);
-      flash('⚠️ 엑셀 읽기에 실패했습니다. 형식을 확인해주세요.');
-    }
-  };
-  reader.readAsArrayBuffer(file);
+
+function renderShipGrid(){
+  const tbody = document.getElementById('ship-grid-tbody');
+  tbody.innerHTML = shipGrid.map((row,r)=>
+    `<tr><td class="mono" style="color:var(--ink-soft); text-align:center;">${r+1}</td>` +
+    GRID_COLS.map(col=>`<td><input data-row="${r}" data-col="${col}" value="${esc(row[col])}"></td>`).join('') +
+    `</tr>`
+  ).join('');
+}
+
+// 셀 입력값을 상태에 반영 (이벤트 위임)
+document.addEventListener('input', (e)=>{
+  const t = e.target;
+  if(t.matches('#ship-grid-tbody input')){
+    shipGrid[Number(t.dataset.row)][t.dataset.col] = t.value;
+  }
+});
+
+// 엑셀에서 복사한 여러 셀을 붙여넣으면 현재 칸부터 채워나간다 (필요시 행 자동 추가)
+document.addEventListener('paste', (e)=>{
+  const t = e.target;
+  if(!t.matches('#ship-grid-tbody input')) return;
+  const text = (e.clipboardData || window.clipboardData).getData('text');
+  if(!text) return;
+  e.preventDefault();
+  let rows = text.replace(/\r/g,'').split('\n');
+  if(rows.length && rows[rows.length-1] === '') rows.pop();
+  rows = rows.map(l=>l.split('\t'));
+  if(rows.length && /상품코드/.test(rows[0][0]||'')){ rows = rows.slice(1); }
+  const startRow = Number(t.dataset.row);
+  const startCol = GRID_COLS.indexOf(t.dataset.col);
+  rows.forEach((cells,ri)=>{
+    const rIdx = startRow+ri;
+    while(shipGrid.length <= rIdx) shipGrid.push(emptyGridRow());
+    cells.forEach((val,ci)=>{
+      const cIdx = startCol+ci;
+      if(cIdx>=0 && cIdx<GRID_COLS.length) shipGrid[rIdx][GRID_COLS[cIdx]] = val.trim();
+    });
+  });
+  renderShipGrid();
+});
+
+function importShipGrid(){
+  shipment = shipGrid
+    .filter(r=> r.code && r.code.trim() && r.code.trim()!=='상품코드')
+    .map(r=>({
+      code:r.code.trim(), name:(r.name||'').trim(), b188:(r.b188||'').trim(), b88:(r.b88||'').trim(),
+      qty: Number(r.qty)||0, plt:(r.plt||'').toString().trim()
+    }));
+  if(shipment.length===0){ flash('불러올 데이터가 없습니다. 표에 값을 채워주세요'); return; }
+  renderShipment();
+  flash(`상차리스트 ${shipment.length}건 불러옴`);
 }
 
 function last5(s){ s = (s||'').toString().trim(); return s.length<=5? s : s.slice(-5); }
@@ -713,6 +755,7 @@ function renderResults(){
 
 /* ---------------- init ---------------- */
 loadMaster();
+initShipGrid();
 </script>
 </body>
 </html>
