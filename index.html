@@ -603,7 +603,7 @@ function runCalculation(){
 
   overrideItems = [];
   missingPltItems = [];
-  const aggMap = {}; // code -> {code,name,totalBoxes,totalOccupancy}
+  const aggMap = {}; // code -> {code,name,b188,b88,totalBoxes,totalOccupancy}
 
   shipment.forEach(it=>{
     const r = resolveItemPlt(it);
@@ -612,7 +612,7 @@ function runCalculation(){
       overrideItems.push({...it, inputPlt: it.plt, newPlt: r.plt, cpBoxText: r.match.row.cpBox});
     }
     const key = it.code || it.name;
-    if(!aggMap[key]) aggMap[key] = {code:it.code, name:it.name, totalBoxes:0, totalOccupancy:0};
+    if(!aggMap[key]) aggMap[key] = {code:it.code, name:it.name, b188:it.b188, b88:it.b88, totalBoxes:0, totalOccupancy:0};
     aggMap[key].totalBoxes += it.qty;
     aggMap[key].totalOccupancy += r.plt;
   });
@@ -632,12 +632,12 @@ function runCalculation(){
     for(let i=0;i<fullCount;i++){
       singlePallets.push({
         type:'single', fill:1,
-        items:[{code:a.code, name:a.name, boxes: boxesPerPlt || a.totalBoxes}]
+        items:[{code:a.code, name:a.name, b188:a.b188, b88:a.b88, boxes: boxesPerPlt || a.totalBoxes}]
       });
     }
     if(remainderOcc > 1e-6){
       remainderPool.push({
-        code:a.code, name:a.name,
+        code:a.code, name:a.name, b188:a.b188, b88:a.b88,
         boxes: Math.max(0, a.totalBoxes - fullCount*boxesPerPlt),
         occupancy: remainderOcc
       });
@@ -740,9 +740,10 @@ function renderResults(){
       </div>
       <div class="pallet-body">
         <table>
-          <thead><tr><th>상품코드</th><th>상품명</th><th class="num">박스수</th><th class="num">PLT 점유</th></tr></thead>
+          <thead><tr><th>상품코드</th><th>상품명</th><th>188바코드</th><th>88바코드</th><th class="num">박스수</th><th class="num">PLT 점유</th></tr></thead>
           <tbody>
             ${p.items.map(it=>`<tr><td class="mono">${esc(it.code)}</td><td>${esc(it.name)}</td>
+              <td class="mono">${esc(it.b188)}</td><td class="mono">${esc(it.b88)}</td>
               <td class="num mono">${Number(it.boxes).toFixed(2)}</td>
               <td class="num mono">${(it.occupancy!==undefined ? it.occupancy : 1).toFixed(2)}</td></tr>`).join('')}
           </tbody>
