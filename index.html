@@ -91,6 +91,7 @@
     display:inline-flex; align-items:center; gap:6px;
   }
   button.btn:active{ transform:scale(0.97); }
+  button.btn:disabled{ opacity:.4; cursor:not-allowed; pointer-events:none; }
   .btn-primary{ background:var(--accent); color:#fff; box-shadow:0 1px 2px rgba(232,135,30,.3); }
   .btn-primary:hover{ background:#D97B16; box-shadow:0 4px 12px rgba(232,135,30,.32); }
   .btn-dark{ background:var(--ink); color:#fff; }
@@ -315,8 +316,13 @@
 
     <!-- ===== 파레트 상세 화면 (파레트 한 줄 클릭하면 이게 뜸) ===== -->
     <div id="calc-detail-view" style="display:none;">
-      <div class="row" style="margin-bottom:16px;">
+      <div class="row" style="margin-bottom:16px; justify-content:space-between;">
         <button class="btn btn-ghost btn-sm" onclick="closePalletDetail()">← 목록으로</button>
+        <div class="row" style="gap:8px;">
+          <button class="btn btn-ghost btn-sm" id="detail-prev-btn" onclick="detailPrev()">← 이전 파레트</button>
+          <span class="note" id="detail-position" style="align-self:center; min-width:52px; text-align:center;"></span>
+          <button class="btn btn-ghost btn-sm" id="detail-next-btn" onclick="detailNext()">다음 파레트 →</button>
+        </div>
       </div>
       <div class="card">
         <div class="detail-header">
@@ -791,9 +797,11 @@ function renderResults(){
   }).join('');
 }
 
+let currentDetailIdx = null;
 function openPalletDetail(idx){
   const p = pallets[idx];
   if(!p) return;
+  currentDetailIdx = idx;
   const {typeLabel, pillClass} = palletTypeInfo(p);
   document.getElementById('detail-stack').innerHTML = stackHtml(p.fill);
   document.getElementById('detail-title').textContent = `PLT ${idx+1}`;
@@ -803,9 +811,14 @@ function openPalletDetail(idx){
     <td class="mono">${esc(it.b188)}</td><td class="mono">${esc(it.b88)}</td>
     <td class="num mono">${Number(it.boxes).toFixed(2)}</td>
     <td class="num mono">${(it.occupancy!==undefined ? it.occupancy : 1).toFixed(2)}</td></tr>`).join('');
+  document.getElementById('detail-position').textContent = `${idx+1} / ${pallets.length}`;
+  document.getElementById('detail-prev-btn').disabled = idx<=0;
+  document.getElementById('detail-next-btn').disabled = idx>=pallets.length-1;
   document.getElementById('calc-results-view').style.display='none';
   document.getElementById('calc-detail-view').style.display='block';
 }
+function detailPrev(){ if(currentDetailIdx>0) openPalletDetail(currentDetailIdx-1); }
+function detailNext(){ if(currentDetailIdx<pallets.length-1) openPalletDetail(currentDetailIdx+1); }
 function closePalletDetail(){
   document.getElementById('calc-detail-view').style.display='none';
   document.getElementById('calc-results-view').style.display='block';
