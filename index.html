@@ -411,7 +411,7 @@ function addMasterRow(){
   saveMasterDebounced();
   const tbody = document.getElementById('master-tbody');
   const lastRow = tbody.lastElementChild;
-  if(lastRow) lastRow.scrollIntoView({behavior:'smooth', block:'center'});
+  if(lastRow) lastRow.scrollIntoView({behavior:'auto', block:'center'});
 }
 function updateMaster(id, field, value){
   const row = master.find(r=>r.id===id);
@@ -499,6 +499,7 @@ function showResultsView(){
   document.getElementById('calc-input-view').style.display='none';
   document.getElementById('calc-results-view').style.display='block';
   document.getElementById('calc-detail-view').style.display='none';
+  window.scrollTo({top:0, behavior:'auto'});
 }
 
 function renderShipGrid(){
@@ -552,6 +553,7 @@ function importShipGrid(){
   if(shipment.length===0){ flash('불러올 데이터가 없습니다. 표에 값을 채워주세요'); return; }
   renderShipment();
   flash(`상차리스트 ${shipment.length}건 불러옴`);
+  document.getElementById('ship-preview-card').scrollIntoView({behavior:'auto', block:'start'});
 }
 
 function last5(s){ s = (s||'').toString().trim(); return s.length<=5? s : s.slice(-5); }
@@ -749,7 +751,7 @@ function renderResults(){
   list.innerHTML = pallets.map((p, idx)=>{
     const {typeLabel, pillClass} = palletTypeInfo(p);
     return `
-      <div class="pallet-row" onclick="openPalletDetail(${idx})">
+      <div class="pallet-row" data-idx="${idx}" onclick="openPalletDetail(${idx})">
         <div class="stack">${stackHtml(p.fill)}</div>
         <div class="pallet-info">
           <div class="id disp">PLT ${idx+1}</div>
@@ -781,12 +783,17 @@ function openPalletDetail(idx){
   document.getElementById('detail-next-btn').disabled = idx>=pallets.length-1;
   document.getElementById('calc-results-view').style.display='none';
   document.getElementById('calc-detail-view').style.display='block';
+  window.scrollTo({top:0, behavior:'auto'});
 }
 function detailPrev(){ if(currentDetailIdx>0) openPalletDetail(currentDetailIdx-1); }
 function detailNext(){ if(currentDetailIdx<pallets.length-1) openPalletDetail(currentDetailIdx+1); }
 function closePalletDetail(){
   document.getElementById('calc-detail-view').style.display='none';
   document.getElementById('calc-results-view').style.display='block';
+  if(currentDetailIdx!==null){
+    const row = document.querySelector(`.pallet-row[data-idx="${currentDetailIdx}"]`);
+    if(row) row.scrollIntoView({behavior:'auto', block:'center'});
+  }
 }
 
 /* ---------------- init ---------------- */
