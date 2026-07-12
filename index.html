@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Coupang Supplier Hub · 트럭적재 자동구성</title>
+<title>Coupang Supplier Hub · 쿠팡계산기</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -42,12 +42,6 @@
     margin-bottom:28px; gap:16px; flex-wrap:wrap;
   }
   .brand{ display:flex; align-items:center; gap:13px; }
-  .brand .mark{
-    width:40px;height:40px;border-radius:11px;background:var(--ink);
-    display:flex;align-items:center;justify-content:center;flex-shrink:0;
-    box-shadow:var(--shadow-sm);
-  }
-  .brand .mark svg{ width:22px; height:22px; }
   .brand h1{ font-size:23px; margin:0; letter-spacing:-0.01em; }
   .brand p{ margin:2px 0 0; font-size:12.5px; color:var(--ink-soft); }
 
@@ -178,11 +172,8 @@
 
   <header class="top">
     <div class="brand">
-      <div class="mark">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M4 8L12 4L20 8V16L12 20L4 16V8Z" stroke="#E8871E" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 8L12 12M12 12L20 8M12 12V20" stroke="#E8871E" stroke-width="1.8" stroke-linejoin="round"/></svg>
-      </div>
       <div>
-        <h1 class="disp">트럭적재 자동구성</h1>
+        <h1 class="disp">쿠팡계산기</h1>
         <p>Coupang Supplier Hub · 파레트 재적 계산기</p>
       </div>
     </div>
@@ -203,12 +194,9 @@
       </div>
 
       <div id="import-box" style="display:none; margin-bottom:16px;">
-        <p class="note" style="margin-bottom:8px;">엑셀에서 아래 4개 열로 정리한 뒤, 표 전체(헤더 포함해도 자동 인식)를 복사해서 붙여넣으세요. 쿠팡박스수/PLT 칸은 <code class="k">48 (8방 * 6단)</code> 처럼 숫자와 적재구성을 한 칸에 같이 적어도 자동으로 숫자만 인식합니다:<br>
-        <code class="k">상품코드 · 상품명 · 박스수/PLT(자사) · 쿠팡박스수/PLT</code></p>
         <textarea id="master-paste" placeholder="여기에 엑셀에서 복사한 내용을 붙여넣으세요 (Tab으로 구분)"></textarea>
         <div class="row" style="margin-top:8px;">
           <button class="btn btn-primary btn-sm" onclick="importMasterPaste()">가져오기 (상품코드 기준 갱신/추가)</button>
-          <button class="btn btn-ghost btn-sm" onclick="fillMasterSample()">예시 데이터 채워보기</button>
         </div>
       </div>
 
@@ -243,9 +231,9 @@
               <tr>
                 <th style="width:34px; text-align:center;">#</th>
                 <th style="width:100px;">상품코드</th>
-                <th>상품명</th>
+                <th style="width:200px;">상품명</th>
                 <th style="width:130px;">188바코드</th>
-                <th style="width:110px;">88바코드</th>
+                <th style="width:140px;">88바코드</th>
                 <th style="width:90px;">수량(낱개 수)</th>
                 <th style="width:80px;">PLT</th>
               </tr>
@@ -255,7 +243,7 @@
         </div>
         <div class="row" style="margin-top:10px;">
           <button class="btn btn-primary btn-sm" onclick="importShipGrid()">상차리스트 불러오기</button>
-          <button class="btn btn-ghost btn-sm" onclick="addGridRows(20)">+ 20행 추가</button>
+          <button class="btn btn-ghost btn-sm" onclick="addGridRows(1)">+ 행 추가</button>
           <button class="btn btn-ghost btn-sm" onclick="clearShipGrid()">표 비우기</button>
           <span class="toolbar-right note" id="ship-count-note"></span>
         </div>
@@ -270,7 +258,7 @@
           </table>
         </div>
         <div class="row" style="margin-top:16px;">
-          <button class="btn btn-dark" onclick="runCalculation()">🚚 적재 계산하기</button>
+          <button class="btn btn-dark" onclick="runCalculation()">적재 계산하기</button>
         </div>
       </div>
     </div>
@@ -421,6 +409,9 @@ function addMasterRow(){
   master.push({id:uid(), code:'', name:'', ownBox:'', cpBox:''});
   renderMaster();
   saveMasterDebounced();
+  const tbody = document.getElementById('master-tbody');
+  const lastRow = tbody.lastElementChild;
+  if(lastRow) lastRow.scrollIntoView({behavior:'smooth', block:'center'});
 }
 function updateMaster(id, field, value){
   const row = master.find(r=>r.id===id);
@@ -443,28 +434,6 @@ function deleteMaster(id){
 function toggleImportBox(){
   const box = document.getElementById('import-box');
   box.style.display = box.style.display === 'none' ? 'block' : 'none';
-}
-function fillMasterSample(){
-  document.getElementById('master-paste').value =
-`상품코드	상품명	박스수 / PLT	쿠팡박스수 / PLT
-100131	부침가루1kg	70	48 (8방 * 6단)
-101615	핫케익가루500G/상온	70	54 (9방 * 6단)
-101862	중력1등3kg	50	25 (4방 * 7단)
-101909	콩기름 0.9L (20입)/상온	60	50 (10방 * 5단)
-102293	갈색설탕15KG/상온	78	50 (5방 * 10단)
-102404	튀김가루1kg	70	48 (8방 * 6단)
-104038	옥수수유 0.9L (20입)/상온	60	50 (10방 * 5단)
-104054	핫케익가루1kg	70	48 (8방 * 6단)
-104109	찰밀가루3kg	50	25 (4방 * 7단)
-104403	콩기름 1.5L (12입)/상온	60	48 (8방 * 6단)
-104739	다시다 쇠고기 750g	80	48 (8방 * 6단)
-104747	통감자 바삭부침가루(고급) 1KG/상온	60	48 (8방 * 6단)
-104763	통감자 바삭부침가루(고급) 1KG/상온	60	48 (8방 * 6단)
-105170	멸치다시다	80	64 (8방 * 8단)
-105969	하얀설탕15kg	84	66 (6방 * 11단)
-106512	물엿1.2kg	60	48 (12방 * 4단)
-113134	New 찰밀가루 1kg	84	70 (7방 * 10단)
-113653	강력1등1kg*10EA	84	70 (7방 * 10단)`;
 }
 
 /* generic tab/comma splitter, skips a header row if it contains 상품코드 */
