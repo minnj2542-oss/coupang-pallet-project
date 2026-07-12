@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Coupang Supplier Hub · 트럭적재 자동구성</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#F7F7F8;
+    --surface:#FFFFFF;
+    --ink:#15181D;
+    --ink-soft:#6B7280;
+    --line:#E7E8EC;
+    --line-soft:#F1F2F4;
+    --accent:#E8871E;
+    --accent-ink:#8A4B0C;
+    --accent-2:#1F6F63;
+    --success:#16A34A;
+    --success-bg:#EAFBF0;
+    --danger:#DC2626;
+    --danger-bg:#FDECEC;
+    --warn-bg:#FFF6E8;
+    --radius:16px;
+    --shadow-sm:0 1px 2px rgba(15,23,32,.04), 0 1px 1px rgba(15,23,32,.03);
+    --shadow-md:0 10px 24px rgba(15,23,32,.07), 0 2px 6px rgba(15,23,32,.04);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'Inter',sans-serif; -webkit-font-smoothing:antialiased;
+    line-height:1.45;
+  }
+  .mono{ font-family:'IBM Plex Mono',monospace; }
+  .disp{ font-family:'Barlow Semi Condensed',sans-serif; font-weight:800; letter-spacing:0.01em; }
+
+  #app{ max-width:1180px; margin:0 auto; padding:36px 24px 90px; }
+
+  header.top{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:28px; gap:16px; flex-wrap:wrap;
+  }
+  .brand{ display:flex; align-items:center; gap:13px; }
+  .brand .mark{
+    width:40px;height:40px;border-radius:11px;background:var(--ink);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    box-shadow:var(--shadow-sm);
+  }
+  .brand .mark svg{ width:22px; height:22px; }
+  .brand h1{ font-size:23px; margin:0; letter-spacing:-0.01em; }
+  .brand p{ margin:2px 0 0; font-size:12.5px; color:var(--ink-soft); }
+
+  nav.tabs{ display:inline-flex; gap:2px; background:var(--line-soft); padding:4px; border-radius:13px; border:none; }
+  nav.tabs button{
+    border:none; background:transparent; padding:9px 16px; border-radius:10px;
+    font-family:'Inter'; font-weight:600; font-size:13.5px; color:var(--ink-soft); cursor:pointer;
+    transition:all .15s ease;
+  }
+  nav.tabs button.active{ background:var(--surface); color:var(--ink); box-shadow:var(--shadow-sm); }
+  nav.tabs button:not(.active):hover{ color:var(--ink); }
+
+  section.panel{ display:none; }
+  section.panel.active{ display:block; }
+
+  .card{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:var(--shadow-sm);
+    padding:24px 26px; margin-bottom:20px;
+  }
+  .card h2{ font-size:15.5px; margin:0 0 6px; display:flex; align-items:center; gap:8px; letter-spacing:-0.005em; }
+  .card .eyebrow{
+    font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--accent-ink); background:var(--warn-bg); padding:3px 9px; border-radius:20px;
+  }
+  .card .sub{ font-size:12.5px; color:var(--ink-soft); margin:0 0 18px; line-height:1.55; }
+
+  .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+
+  textarea{
+    width:100%; min-height:120px; border:1px solid var(--line); border-radius:10px;
+    padding:13px; font-family:'IBM Plex Mono',monospace; font-size:12.5px; resize:vertical;
+    background:var(--bg); color:var(--ink); transition:border-color .15s ease, background .15s ease;
+  }
+  textarea:focus{ outline:none; border-color:var(--accent); background:var(--surface); }
+  textarea::placeholder{ color:#9AA1AB; }
+
+  button.btn{
+    border:none; border-radius:10px; padding:10px 17px; font-weight:600; font-size:13px;
+    cursor:pointer; font-family:'Inter'; transition:transform .12s ease, box-shadow .15s ease, background .15s ease, opacity .15s ease;
+    display:inline-flex; align-items:center; gap:6px;
+  }
+  button.btn:active{ transform:scale(0.97); }
+  .btn-primary{ background:var(--accent); color:#fff; box-shadow:0 1px 2px rgba(232,135,30,.3); }
+  .btn-primary:hover{ background:#D97B16; box-shadow:0 4px 12px rgba(232,135,30,.32); }
+  .btn-dark{ background:var(--ink); color:#fff; }
+  .btn-dark:hover{ background:#262b32; box-shadow:var(--shadow-md); }
+  .btn-ghost{ background:var(--line-soft); color:var(--ink); }
+  .btn-ghost:hover{ background:var(--line); }
+  .btn-danger{ background:var(--danger-bg); color:var(--danger); }
+  .btn-sm{ padding:7px 11px; font-size:12px; }
+  input[type=file]{ font-size:12.5px; }
+
+  table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  th{
+    text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; font-weight:700;
+    color:var(--ink-soft); border-bottom:1px solid var(--line); padding:9px 10px; white-space:nowrap;
+  }
+  td{ border-bottom:1px solid var(--line-soft); padding:8px 10px; vertical-align:middle; }
+  tr:hover td{ background:var(--line-soft); }
+  td input{
+    width:100%; border:1px solid transparent; background:transparent; padding:5px 6px;
+    border-radius:6px; font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--ink);
+  }
+  td input:hover{ border-color:var(--line); }
+  td input:focus{ outline:none; border-color:var(--accent); background:#fff; }
+  .num{ text-align:right; }
+  .table-wrap{ overflow-x:auto; }
+
+  .pill{ display:inline-block; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:600; }
+  .pill-ok{ background:var(--success-bg); color:var(--success); }
+  .pill-bad{ background:var(--danger-bg); color:var(--danger); }
+  .pill-mix{ background:#EEF1FE; color:#4147C4; }
+  .pill-single{ background:var(--warn-bg); color:var(--accent-ink); }
+
+  .stat-row{ display:flex; gap:14px; flex-wrap:wrap; margin-bottom:6px; }
+  .stat{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:var(--shadow-sm);
+    padding:18px 22px; flex:1; min-width:150px;
+  }
+  .stat .n{ font-size:32px; font-weight:800; font-family:'Barlow Semi Condensed'; line-height:1; }
+  .stat .l{ font-size:12px; color:var(--ink-soft); margin-top:5px; }
+
+  .pallet-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; }
+  .pallet-card{
+    border:1px solid var(--line); border-radius:var(--radius); background:var(--surface);
+    box-shadow:var(--shadow-sm); overflow:hidden; transition:box-shadow .15s ease;
+  }
+  .pallet-card.open{ box-shadow:var(--shadow-md); }
+  .pallet-head{
+    display:flex; align-items:center; gap:12px; padding:16px 18px; cursor:pointer;
+  }
+  .pallet-head:hover{ background:var(--line-soft); }
+  .stack{
+    width:26px; height:44px; border-radius:4px; overflow:hidden; display:flex; flex-direction:column-reverse;
+    border:1px solid var(--line); flex-shrink:0; background:#fff;
+  }
+  .stack .seg{ width:100%; }
+  .pallet-info{ flex:1; min-width:0; }
+  .pallet-info .id{ font-family:'Barlow Semi Condensed'; font-weight:800; font-size:18px; }
+  .pallet-info .meta{ font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
+  .fill-num{ font-family:'IBM Plex Mono'; font-weight:600; font-size:15px; text-align:right; }
+  .chev{ font-size:12px; color:var(--ink-soft); transition:transform .15s ease; }
+  .pallet-card.open .chev{ transform:rotate(90deg); }
+  .pallet-body{ display:none; border-top:1px solid var(--line-soft); }
+  .pallet-card.open .pallet-body{ display:block; }
+  .pallet-body table td, .pallet-body table th{ padding:8px 14px; }
+  .pallet-body table th{ background:var(--line-soft); }
+
+  .empty{
+    text-align:center; padding:36px 20px; color:var(--ink-soft); font-size:13px;
+    border:1.5px dashed var(--line); border-radius:var(--radius);
+  }
+  .note{ font-size:12px; color:var(--ink-soft); line-height:1.6; }
+  .note b{ color:var(--ink); }
+  code.k{ background:var(--line-soft); padding:1px 6px; border-radius:5px; font-size:11.5px; }
+  .flash{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--ink); color:#fff; padding:11px 20px; border-radius:10px; font-size:13px;
+    box-shadow:var(--shadow-md);
+    opacity:0; pointer-events:none; transition:all .25s ease; z-index:50;
+  }
+  .flash.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  .toolbar-right{ margin-left:auto; }
+  .shared-note{ font-size:11.5px; color:var(--accent-ink); background:var(--warn-bg); padding:6px 10px; border-radius:7px; display:inline-flex; gap:6px; align-items:center; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header class="top">
+    <div class="brand">
+      <div class="mark">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 8L12 4L20 8V16L12 20L4 16V8Z" stroke="#E8871E" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 8L12 12M12 12L20 8M12 12V20" stroke="#E8871E" stroke-width="1.8" stroke-linejoin="round"/></svg>
+      </div>
+      <div>
+        <h1 class="disp">트럭적재 자동구성</h1>
+        <p>Coupang Supplier Hub · 파레트 재적 계산기</p>
+      </div>
+    </div>
+    <nav class="tabs">
+      <button data-tab="calc" class="active">상차리스트 입력 &amp; 계산</button>
+      <button data-tab="master">재적 마스터관리 <span style="opacity:.6; font-weight:500;">(보조)</span></button>
+    </nav>
+  </header>
+
+  <!-- ============ MASTER TAB ============ -->
+  <section class="panel" id="panel-master">
+
+    <div class="card">
+      <h2>쿠팡 재적 마스터리스트 <span class="eyebrow">보조 도구</span></h2>
+      <p class="sub">상차리스트에는 이미 PLT 값이 입력되어 있으므로 <b>대부분의 상품은 이 리스트가 없어도 그대로 계산됩니다.</b> 다만 여기 등록된 상품코드가 상차리스트에 나오면, 입력된 PLT를 무시하고 <b>수량(박스) ÷ 쿠팡박스수/PLT</b>로 자동 재계산해서 덮어씁니다.</p>
+      <div class="row" style="margin-bottom:14px;">
+        <button class="btn btn-dark btn-sm" onclick="addMasterRow()">+ 행 추가</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleImportBox()">엑셀 붙여넣기로 가져오기</button>
+        <span class="toolbar-right shared-note">💾 이 브라우저에만 저장됩니다 (팀 공유는 아직 지원 안 함)</span>
+      </div>
+
+      <div id="import-box" style="display:none; margin-bottom:16px;">
+        <p class="note" style="margin-bottom:8px;">엑셀에서 아래 4개 열로 정리한 뒤, 표 전체(헤더 포함해도 자동 인식)를 복사해서 붙여넣으세요. 쿠팡박스수/PLT 칸은 <code class="k">48 (8방 * 6단)</code> 처럼 숫자와 적재구성을 한 칸에 같이 적어도 자동으로 숫자만 인식합니다:<br>
+        <code class="k">상품코드 · 상품명 · 박스수/PLT(자사) · 쿠팡박스수/PLT</code></p>
+        <textarea id="master-paste" placeholder="여기에 엑셀에서 복사한 내용을 붙여넣으세요 (Tab으로 구분)"></textarea>
+        <div class="row" style="margin-top:8px;">
+          <button class="btn btn-primary btn-sm" onclick="importMasterPaste()">가져오기 (상품코드 기준 갱신/추가)</button>
+          <button class="btn btn-ghost btn-sm" onclick="fillMasterSample()">예시 데이터 채워보기</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table id="master-table">
+          <thead>
+            <tr>
+              <th style="width:100px;">상품코드</th>
+              <th>상품명</th>
+              <th style="width:120px;">박스수 / PLT</th>
+              <th style="width:180px;">쿠팡박스수 / PLT</th>
+              <th style="width:30px;"></th>
+            </tr>
+          </thead>
+          <tbody id="master-tbody"></tbody>
+        </table>
+      </div>
+      <div id="master-empty" class="empty" style="display:none; margin-top:12px;">등록된 상품이 없습니다. 위에서 행을 추가하거나 엑셀을 붙여넣어 시작하세요.</div>
+    </div>
+  </section>
+
+  <!-- ============ CALC TAB ============ -->
+  <section class="panel active" id="panel-calc">
+
+    <div class="card">
+      <h2>상차리스트 입력</h2>
+      <p class="sub">이번 트럭에 실을 상품 리스트를 붙여넣거나 엑셀 파일을 업로드하세요. 열 순서: <code class="k">상품코드 · 상품명 · 188바코드 · 88바코드 · 수량(박스수) · PLT</code><br>PLT 값은 입력하신 그대로 사용합니다. 단, 상품코드가 재적 마스터리스트에 등록되어 있으면 자동으로 재계산해서 덮어씁니다.</p>
+      <div class="row" style="margin-bottom:10px;">
+        <input type="file" id="ship-file" accept=".xlsx,.xls,.csv" onchange="handleShipFile(event)">
+        <span style="color:var(--ink-soft); font-size:12px;">또는 아래에 붙여넣기 ↓</span>
+      </div>
+      <textarea id="ship-paste" placeholder="상품코드	상품명	188바코드	88바코드	수량(박스수)	PLT&#10;425562	옛날돈까스소스	18801955033179	8801953033172	1	0.01"></textarea>
+      <div class="row" style="margin-top:10px;">
+        <button class="btn btn-primary btn-sm" onclick="importShipPaste()">상차리스트 불러오기</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearShipment()">비우기</button>
+        <span class="toolbar-right note" id="ship-count-note"></span>
+      </div>
+    </div>
+
+    <div class="card" id="ship-preview-card" style="display:none;">
+      <h2>불러온 상차리스트 <span class="eyebrow" id="ship-count-badge"></span></h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>상품코드</th><th>상품명</th><th>188바코드</th><th>88바코드</th><th class="num">수량(박스)</th><th class="num">PLT(사용값)</th><th>비고</th></tr></thead>
+          <tbody id="ship-tbody"></tbody>
+        </table>
+      </div>
+      <div class="row" style="margin-top:16px;">
+        <button class="btn btn-dark" onclick="runCalculation()">🚚 적재 계산하기</button>
+      </div>
+    </div>
+
+    <div id="override-card" class="card" style="display:none;">
+      <h2>🔁 마스터 기준으로 재계산된 상품 <span class="eyebrow">쿠팡박스수/PLT 적용됨</span></h2>
+      <p class="sub">아래 상품은 재적 마스터리스트에 등록되어 있어, 입력된 PLT 대신 <b>수량(박스) ÷ 쿠팡박스수/PLT</b>로 다시 계산한 값을 사용했습니다.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>상품코드</th><th>상품명</th><th class="num">수량(박스)</th><th class="num">입력 PLT</th><th class="num">재계산 PLT</th><th>쿠팡박스수/PLT</th></tr></thead>
+        <tbody id="override-tbody"></tbody>
+      </table></div>
+    </div>
+
+    <div id="missingplt-card" class="card" style="display:none;">
+      <h2>⚠️ PLT 값 누락 상품 <span class="eyebrow" style="background:var(--danger-bg); color:var(--danger);">계산 제외</span></h2>
+      <p class="sub">아래 상품은 PLT 값이 비어있거나 숫자가 아니고, 마스터리스트에도 등록되어 있지 않아 계산에서 제외됐습니다.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>상품코드</th><th>상품명</th><th class="num">수량(박스)</th><th>입력 PLT</th></tr></thead>
+        <tbody id="missingplt-tbody"></tbody>
+      </table></div>
+    </div>
+
+    <div id="results-wrap" style="display:none;">
+      <div class="stat-row">
+        <div class="stat"><div class="n" id="stat-plt">0</div><div class="l">총 파레트 수</div></div>
+        <div class="stat"><div class="n" id="stat-totalfill">0.00</div><div class="l">총 재적 PLT (합산)</div></div>
+        <div class="stat"><div class="n" id="stat-single">0</div><div class="l">완충(단일 SKU) 파레트</div></div>
+        <div class="stat"><div class="n" id="stat-mixed">0</div><div class="l">혼적 파레트</div></div>
+      </div>
+      <div class="pallet-grid" id="pallet-grid"></div>
+    </div>
+
+  </section>
+
+</div>
+
+<div class="flash" id="flash"></div>
+
+<script>
+/* ---------------- storage ---------------- */
+const MASTER_KEY = 'master-list';
+let master = [];   // {id, code, name, ownBox, cpBox}  cpBox는 "48 (8방 * 6단)" 같은 원문 텍스트, 숫자는 cpBoxNum()으로 추출
+let shipment = [];  // {code, name, b188, b88, qty, plt}  qty는 박스수, plt는 입력된 PLT값(마스터 미등록 상품은 이 값을 그대로 사용)
+let productAgg = [];
+let overrideItems = [];   // 마스터 등록으로 인해 PLT가 재계산된 상품 목록 (표시용)
+let missingPltItems = []; // PLT 값도 없고 마스터에도 없어 계산에서 제외된 상품 목록
+let pallets = [];
+
+function flash(msg){
+  const el = document.getElementById('flash');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'), 2200);
+}
+function uid(){ return Math.random().toString(36).slice(2,10); }
+
+async function loadMaster(){
+  try{
+    const raw = localStorage.getItem(MASTER_KEY);
+    master = raw ? JSON.parse(raw) : [];
+  }catch(e){
+    master = [];
+  }
+  renderMaster();
+}
+let saveTimer = null;
+function saveMasterDebounced(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveMaster, 500);
+}
+async function saveMaster(){
+  try{
+    localStorage.setItem(MASTER_KEY, JSON.stringify(master));
+  }catch(e){
+    console.error('저장 실패', e);
+    flash('⚠️ 저장에 실패했습니다. 브라우저 저장공간을 확인해주세요.');
+  }
+}
+
+/* ---------------- tabs ---------------- */
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('section.panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-'+btn.dataset.tab).classList.add('active');
+  });
+});
+
+/* ---------------- master table render ---------------- */
+function renderMaster(){
+  const tbody = document.getElementById('master-tbody');
+  tbody.innerHTML = '';
+  document.getElementById('master-empty').style.display = master.length ? 'none' : 'block';
+  master.forEach(row=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input value="${esc(row.code)}" oninput="updateMaster('${row.id}','code',this.value)"></td>
+      <td><input value="${esc(row.name)}" oninput="updateMaster('${row.id}','name',this.value)"></td>
+      <td><input class="num" value="${row.ownBox ?? ''}" oninput="updateMaster('${row.id}','ownBox',this.value)"></td>
+      <td><input value="${esc(row.cpBox)}" placeholder="예: 48 (8방 * 6단)" oninput="updateMaster('${row.id}','cpBox',this.value)"></td>
+      <td><button class="btn btn-danger btn-sm" style="padding:4px 8px;" onclick="deleteMaster('${row.id}')">✕</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+function esc(v){ return (v===undefined||v===null) ? '' : String(v).replace(/"/g,'&quot;'); }
+
+function addMasterRow(){
+  master.push({id:uid(), code:'', name:'', ownBox:'', cpBox:''});
+  renderMaster();
+  saveMasterDebounced();
+}
+function updateMaster(id, field, value){
+  const row = master.find(r=>r.id===id);
+  if(!row) return;
+  row[field] = field==='ownBox' ? (value===''? '' : Number(value)) : value;
+  saveMasterDebounced();
+}
+// "48 (8방 * 6단)" 같은 문자열에서 맨 앞 숫자(쿠팡 박스수/PLT)만 추출
+function cpBoxNum(text){
+  const m = (text||'').toString().match(/\d+/);
+  return m ? Number(m[0]) : 0;
+}
+function deleteMaster(id){
+  master = master.filter(r=>r.id!==id);
+  renderMaster();
+  saveMasterDebounced();
+  flash('삭제되었습니다');
+}
+
+function toggleImportBox(){
+  const box = document.getElementById('import-box');
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+function fillMasterSample(){
+  document.getElementById('master-paste').value =
+`상품코드	상품명	박스수 / PLT	쿠팡박스수 / PLT
+100131	부침가루1kg	70	48 (8방 * 6단)
+101615	핫케익가루500G/상온	70	54 (9방 * 6단)
+101862	중력1등3kg	50	25 (4방 * 7단)
+101909	콩기름 0.9L (20입)/상온	60	50 (10방 * 5단)
+102293	갈색설탕15KG/상온	78	50 (5방 * 10단)
+102404	튀김가루1kg	70	48 (8방 * 6단)
+104038	옥수수유 0.9L (20입)/상온	60	50 (10방 * 5단)
+104054	핫케익가루1kg	70	48 (8방 * 6단)
+104109	찰밀가루3kg	50	25 (4방 * 7단)
+104403	콩기름 1.5L (12입)/상온	60	48 (8방 * 6단)
+104739	다시다 쇠고기 750g	80	48 (8방 * 6단)
+104747	통감자 바삭부침가루(고급) 1KG/상온	60	48 (8방 * 6단)
+104763	통감자 바삭부침가루(고급) 1KG/상온	60	48 (8방 * 6단)
+105170	멸치다시다	80	64 (8방 * 8단)
+105969	하얀설탕15kg	84	66 (6방 * 11단)
+106512	물엿1.2kg	60	48 (12방 * 4단)
+113134	New 찰밀가루 1kg	84	70 (7방 * 10단)
+113653	강력1등1kg*10EA	84	70 (7방 * 10단)`;
+}
+
+/* generic tab/comma splitter, skips a header row if it contains 상품코드 */
+function splitRows(text){
+  return text.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length>0)
+    .map(l=> l.includes('\t') ? l.split('\t') : l.split(','))
+    .map(cells=>cells.map(c=>c.trim()));
+}
+
+function importMasterPaste(){
+  const text = document.getElementById('master-paste').value;
+  if(!text.trim()){ flash('붙여넣을 내용이 없습니다'); return; }
+  let rows = splitRows(text);
+  if(rows.length && /상품코드/.test(rows[0][0]||'')){ rows = rows.slice(1); }
+  let added=0, updated=0;
+  rows.forEach(c=>{
+    if(!c[0]) return;
+    const [code,name,ownBox,cpBox] = c;
+    const existing = master.find(r=>r.code===code);
+    const data = {
+      code: code||'', name:name||'',
+      ownBox: ownBox? Number(ownBox): '',
+      cpBox: cpBox||''
+    };
+    if(existing){ Object.assign(existing, data); updated++; }
+    else { master.push({id:uid(), ...data}); added++; }
+  });
+  renderMaster();
+  saveMaster();
+  document.getElementById('master-paste').value='';
+  flash(`가져오기 완료: 신규 ${added}건 / 갱신 ${updated}건`);
+}
+
+/* ---------------- shipment import ---------------- */
+function importShipPaste(){
+  const text = document.getElementById('ship-paste').value;
+  if(!text.trim()){ flash('붙여넣을 내용이 없습니다'); return; }
+  let rows = splitRows(text);
+  if(rows.length && /상품코드/.test(rows[0][0]||'')){ rows = rows.slice(1); }
+  shipment = rows.filter(c=>c[0]).map(c=>{
+    const [code,name,b188,b88,qty,plt] = c;
+    return { code:code||'', name:name||'', b188:b188||'', b88:b88||'', qty: qty? Number(qty):0, plt: plt||'' };
+  });
+  renderShipment();
+  flash(`상차리스트 ${shipment.length}건 불러옴`);
+}
+function clearShipment(){
+  shipment=[]; renderShipment();
+  document.getElementById('results-wrap').style.display='none';
+  document.getElementById('override-card').style.display='none';
+  document.getElementById('missingplt-card').style.display='none';
+}
+function handleShipFile(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    try{
+      const wb = XLSX.read(e.target.result, {type:'array'});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      let rows = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
+      rows = rows.filter(r=> r.some(c=>String(c).trim()!==''));
+      if(rows.length && /상품코드/.test(String(rows[0][0]||''))){ rows = rows.slice(1); }
+      shipment = rows.map(c=>{
+        const [code,name,b188,b88,qty,plt] = c;
+        return { code:String(code||'').trim(), name:String(name||'').trim(),
+                 b188:String(b188||'').trim(), b88:String(b88||'').trim(),
+                 qty: Number(qty)||0, plt: String(plt??'').trim() };
+      }).filter(r=>r.code);
+      renderShipment();
+      flash(`엑셀에서 ${shipment.length}건 불러옴`);
+    }catch(err){
+      console.error(err);
+      flash('⚠️ 엑셀 읽기에 실패했습니다. 형식을 확인해주세요.');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function last5(s){ s = (s||'').toString().trim(); return s.length<=5? s : s.slice(-5); }
+
+function findMasterFor(item){
+  if(!item.code && !item.name) return null;
+  let m = master.find(r=> r.code && item.code && r.code===item.code);
+  if(m) return {row:m, via:'상품코드'};
+  m = master.find(r=> r.name && item.name && r.name.trim()===item.name.trim());
+  if(m) return {row:m, via:'상품명'};
+  return null;
+}
+
+// 상차리스트 한 줄에 대해 실제 계산에 쓸 PLT를 결정.
+// 마스터에 등록된 상품(쿠팡박스수/PLT 확인 가능)이면 수량÷쿠팡박스수로 재계산해서 입력값을 덮어쓰고,
+// 그 외(대부분)는 입력된 PLT를 그대로 신뢰해서 사용한다.
+function resolveItemPlt(item){
+  const match = findMasterFor(item);
+  if(match){
+    const cpNum = cpBoxNum(match.row.cpBox);
+    if(cpNum){
+      return { plt: item.qty / cpNum, overridden:true, match, cpNum };
+    }
+  }
+  const inputPlt = parseFloat(item.plt);
+  if(!isNaN(inputPlt)){
+    return { plt: inputPlt, overridden:false, match:null, cpNum:null };
+  }
+  return { plt: null, overridden:false, match:null, cpNum:null };
+}
+function fmtPlt(n){ return Number(n.toFixed(4)).toString(); }
+
+function renderShipment(){
+  const wrap = document.getElementById('ship-preview-card');
+  wrap.style.display = shipment.length? 'block':'none';
+  document.getElementById('ship-count-badge').textContent = shipment.length+'건';
+  document.getElementById('ship-count-note').textContent = shipment.length? `${shipment.length}개 품목 로드됨` : '';
+  const tbody = document.getElementById('ship-tbody');
+  tbody.innerHTML='';
+  shipment.forEach(it=>{
+    const r = resolveItemPlt(it);
+    let note;
+    if(r.plt===null) note = `<span class="pill pill-bad">PLT 없음</span>`;
+    else if(r.overridden) note = `<span class="pill pill-mix">마스터 재적용</span>`;
+    else note = `<span class="pill pill-ok">입력값 사용</span>`;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="mono">${esc(it.code)}</td>
+      <td>${esc(it.name)}</td>
+      <td class="mono">${esc(it.b188)}</td>
+      <td class="mono">${esc(it.b88)}</td>
+      <td class="num mono">${it.qty}</td>
+      <td class="num mono">${r.plt===null ? '-' : fmtPlt(r.plt)}</td>
+      <td>${note}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+/* ---------------- calculation ---------------- */
+function runCalculation(){
+  if(shipment.length===0){ flash('상차리스트를 먼저 불러와주세요'); return; }
+
+  overrideItems = [];
+  missingPltItems = [];
+  const aggMap = {}; // code -> {code,name,totalBoxes,totalOccupancy}
+
+  shipment.forEach(it=>{
+    const r = resolveItemPlt(it);
+    if(r.plt===null){ missingPltItems.push(it); return; }
+    if(r.overridden){
+      overrideItems.push({...it, inputPlt: it.plt, newPlt: r.plt, cpBoxText: r.match.row.cpBox});
+    }
+    const key = it.code || it.name;
+    if(!aggMap[key]) aggMap[key] = {code:it.code, name:it.name, totalBoxes:0, totalOccupancy:0};
+    aggMap[key].totalBoxes += it.qty;
+    aggMap[key].totalOccupancy += r.plt;
+  });
+
+  productAgg = Object.values(aggMap);
+
+  // build pallets
+  let singlePallets = [];
+  let remainderPool = [];
+
+  productAgg.forEach(a=>{
+    const occ = Math.round(a.totalOccupancy*10000)/10000;
+    const fullCount = Math.floor(occ + 1e-9);
+    const remainderOcc = Math.max(0, Math.round((occ - fullCount)*10000)/10000);
+    // 박스수/PLT 비율을 역산 (마스터 미등록 상품도 완충/잔여 파레트를 동일한 방식으로 나눌 수 있도록)
+    const boxesPerPlt = occ > 0 ? a.totalBoxes / occ : 0;
+    for(let i=0;i<fullCount;i++){
+      singlePallets.push({
+        type:'single', fill:1,
+        items:[{code:a.code, name:a.name, boxes: boxesPerPlt || a.totalBoxes}]
+      });
+    }
+    if(remainderOcc > 1e-6){
+      remainderPool.push({
+        code:a.code, name:a.name,
+        boxes: Math.max(0, a.totalBoxes - fullCount*boxesPerPlt),
+        occupancy: remainderOcc
+      });
+    }
+  });
+
+  remainderPool.sort((x,y)=> y.occupancy - x.occupancy);
+
+  let mixedPallets = [];
+  const HARD_CAP = 0.8, MAX_SKU = 10;
+  remainderPool.forEach(item=>{
+    let placed=false;
+    for(const p of mixedPallets){
+      if(p.items.length < MAX_SKU && (p.fill + item.occupancy) <= HARD_CAP + 1e-9){
+        p.items.push(item); p.fill += item.occupancy; placed=true; break;
+      }
+    }
+    if(!placed){
+      mixedPallets.push({type: 'mixed', fill:item.occupancy, items:[item]});
+    }
+  });
+  // 단일 아이템만 남은 mixed pallet은 '단일(잔여)'로 표기
+  mixedPallets = mixedPallets.map(p=> ({...p, type: p.items.length>1 ? 'mixed' : 'leftover'}));
+
+  pallets = [...singlePallets, ...mixedPallets];
+
+  renderResults();
+  renderOverrideInfo();
+  renderMissingPlt();
+}
+
+function renderOverrideInfo(){
+  const card = document.getElementById('override-card');
+  card.style.display = overrideItems.length? 'block':'none';
+  const tbody = document.getElementById('override-tbody');
+  tbody.innerHTML='';
+  overrideItems.forEach(it=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="mono">${esc(it.code)}</td><td>${esc(it.name)}</td>
+      <td class="num mono">${it.qty}</td>
+      <td class="num mono">${esc(it.inputPlt)}</td>
+      <td class="num mono" style="color:var(--accent-ink); font-weight:600;">${fmtPlt(it.newPlt)}</td>
+      <td class="mono">${esc(it.cpBoxText)}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+function renderMissingPlt(){
+  const card = document.getElementById('missingplt-card');
+  card.style.display = missingPltItems.length? 'block':'none';
+  const tbody = document.getElementById('missingplt-tbody');
+  tbody.innerHTML='';
+  missingPltItems.forEach(it=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="mono">${esc(it.code)}</td><td>${esc(it.name)}</td>
+      <td class="num mono">${it.qty}</td><td>${esc(it.plt) || '(비어있음)'}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function stackHtml(fill){
+  const segs = 10;
+  const filled = Math.round(fill*segs);
+  let html = '';
+  for(let i=0;i<segs;i++){
+    let color = '#F0F0EC';
+    if(i < filled){
+      if(fill > 0.85) color = 'var(--danger)';
+      else if(fill >= 0.7) color = 'var(--success)';
+      else color = 'var(--accent)';
+    }
+    html += `<div class="seg" style="height:${100/segs}%; background:${color};"></div>`;
+  }
+  return html;
+}
+
+function renderResults(){
+  document.getElementById('results-wrap').style.display = pallets.length? 'block':'none';
+  document.getElementById('stat-plt').textContent = pallets.length;
+  document.getElementById('stat-single').textContent = pallets.filter(p=>p.type==='single').length;
+  document.getElementById('stat-mixed').textContent = pallets.filter(p=>p.type==='mixed'||p.type==='leftover').length;
+  const totalFill = pallets.reduce((s,p)=>s+p.fill,0);
+  document.getElementById('stat-totalfill').textContent = totalFill.toFixed(2);
+
+  const grid = document.getElementById('pallet-grid');
+  grid.innerHTML='';
+  pallets.forEach((p, idx)=>{
+    const typeLabel = p.type==='single' ? '완충 · 단일 SKU' : p.type==='leftover' ? '잔여 · 단일 SKU' : '혼적 SKU';
+    const pillClass = p.type==='single' ? 'pill-single' : p.type==='leftover' ? 'pill-single' : 'pill-mix';
+    const card = document.createElement('div');
+    card.className = 'pallet-card';
+    card.innerHTML = `
+      <div class="pallet-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="stack">${stackHtml(p.fill)}</div>
+        <div class="pallet-info">
+          <div class="id disp">PLT ${idx+1}</div>
+          <div class="meta"><span class="pill ${pillClass}">${typeLabel}</span> · SKU ${p.items.length}개 · <span class="pill pill-ok" style="margin-left:2px;">재적완료</span></div>
+        </div>
+        <div class="fill-num">${p.fill.toFixed(2)}<span style="font-size:11px; color:var(--ink-soft); font-weight:500;"> PLT</span></div>
+        <div class="chev">▶</div>
+      </div>
+      <div class="pallet-body">
+        <table>
+          <thead><tr><th>상품코드</th><th>상품명</th><th class="num">박스수</th><th class="num">PLT 점유</th></tr></thead>
+          <tbody>
+            ${p.items.map(it=>`<tr><td class="mono">${esc(it.code)}</td><td>${esc(it.name)}</td>
+              <td class="num mono">${Number(it.boxes).toFixed(2)}</td>
+              <td class="num mono">${(it.occupancy!==undefined ? it.occupancy : 1).toFixed(2)}</td></tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+/* ---------------- init ---------------- */
+loadMaster();
+</script>
+</body>
+</html>
