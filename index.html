@@ -229,15 +229,17 @@
           <table id="ship-grid-table">
             <thead>
               <tr>
-                <th style="width:30px; text-align:center;">#</th>
-                <th style="width:110px;">고객사&amp;거래처명</th>
-                <th style="width:90px;">상품코드</th>
-                <th style="width:160px;">상품명</th>
-                <th style="width:120px;">BOX바코드</th>
-                <th style="width:120px;">상품바코드</th>
-                <th style="width:70px;">박스수</th>
-                <th style="width:70px;">낱개수</th>
-                <th style="width:70px;">PLT</th>
+                <th style="width:26px; text-align:center;">#</th>
+                <th style="width:90px;">고객사&amp;거래처명</th>
+                <th style="width:80px;">상품코드</th>
+                <th style="width:130px;">상품명</th>
+                <th style="width:100px;">BOX바코드</th>
+                <th style="width:100px;">상품바코드</th>
+                <th style="width:60px;">BOX입수</th>
+                <th style="width:55px;">BOX</th>
+                <th style="width:45px;">EA</th>
+                <th style="width:70px;">총낱개</th>
+                <th style="width:55px;">PLT수</th>
               </tr>
             </thead>
             <tbody id="ship-grid-tbody"></tbody>
@@ -255,7 +257,7 @@
         <h2>불러온 상차리스트 <span class="eyebrow" id="ship-count-badge"></span></h2>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>거래처명</th><th>상품코드</th><th>상품명</th><th>BOX바코드</th><th>상품바코드</th><th class="num">박스수</th><th class="num">낱개수</th><th class="num">PLT(사용값)</th><th>비고</th></tr></thead>
+            <thead><tr><th>거래처명</th><th>상품코드</th><th>상품명</th><th>BOX바코드</th><th>상품바코드</th><th class="num">BOX입수</th><th class="num">BOX</th><th class="num">총낱개</th><th class="num">PLT(사용값)</th><th>비고</th></tr></thead>
             <tbody id="ship-tbody"></tbody>
           </table>
         </div>
@@ -286,9 +288,9 @@
 
       <div id="override-card" class="card" style="display:none;">
         <h2>🔁 마스터 기준으로 재계산된 상품 <span class="eyebrow">쿠팡박스수/PLT 적용됨</span></h2>
-        <p class="sub">아래 상품은 재적 마스터리스트에 등록되어 있어, 입력된 PLT 대신 <b>박스수 ÷ 쿠팡박스수/PLT</b>로 다시 계산한 값을 사용했습니다.</p>
+        <p class="sub">아래 상품은 재적 마스터리스트에 등록되어 있어, 입력된 PLT 대신 <b>BOX ÷ 쿠팡박스수/PLT</b>로 다시 계산한 값을 사용했습니다.</p>
         <div class="table-wrap"><table>
-          <thead><tr><th>상품코드</th><th>상품명</th><th class="num">박스수</th><th class="num">입력 PLT</th><th class="num">재계산 PLT</th><th>쿠팡박스수/PLT</th></tr></thead>
+          <thead><tr><th>상품코드</th><th>상품명</th><th class="num">BOX</th><th class="num">입력 PLT</th><th class="num">재계산 PLT</th><th>쿠팡박스수/PLT</th></tr></thead>
           <tbody id="override-tbody"></tbody>
         </table></div>
       </div>
@@ -297,7 +299,7 @@
         <h2>⚠️ PLT 값 누락 상품 <span class="eyebrow" style="background:var(--danger-bg); color:var(--danger);">계산 제외</span></h2>
         <p class="sub">아래 상품은 PLT 값이 비어있거나 숫자가 아니고, 마스터리스트에도 등록되어 있지 않아 계산에서 제외됐습니다.</p>
         <div class="table-wrap"><table>
-          <thead><tr><th>상품코드</th><th>상품명</th><th class="num">박스수</th><th class="num">낱개수</th><th>입력 PLT</th></tr></thead>
+          <thead><tr><th>상품코드</th><th>상품명</th><th class="num">BOX</th><th class="num">총낱개</th><th>입력 PLT</th></tr></thead>
           <tbody id="missingplt-tbody"></tbody>
         </table></div>
       </div>
@@ -334,7 +336,7 @@
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>상품코드</th><th>상품명</th><th>188바코드</th><th>88바코드</th><th class="num">낱개수</th><th class="num">PLT 점유</th></tr></thead>
+            <thead><tr><th>상품코드</th><th>상품명</th><th>BOX바코드</th><th>상품바코드</th><th class="num">총낱개</th><th class="num">PLT 점유</th></tr></thead>
             <tbody id="detail-tbody"></tbody>
           </table>
         </div>
@@ -352,10 +354,11 @@
 const MASTER_KEY = 'master-list';
 let master = [];   // {id, code, name, ownBox, cpBox}  cpBox는 "48 (8방 * 6단)" 같은 원문 텍스트, 숫자는 cpBoxNum()으로 추출
 let fullShipment = []; // 거래처 필터링 전, 그리드에서 불러온 전체 상차리스트
-let shipment = [];  // {vendor, code, name, b188, b88, boxQty, qty, plt}  boxQty는 박스수, qty는 낱개수(EA), plt는 입력된 PLT값(마스터 미등록 상품은 이 값을 그대로 사용)
-const GRID_COLS = ['vendor','code','name','b188','b88','boxQty','qty','plt'];
+let shipment = [];  // {vendor, code, name, b188, b88, unitsPerBox, boxQty, eaExtra, totalUnits, plt}
+                    // unitsPerBox=BOX입수, boxQty=BOX(박스수), eaExtra=EA(항상 0에 가까움, 미사용), totalUnits=총낱개(항상 정수), plt=입력된 PLT값
+const GRID_COLS = ['vendor','code','name','b188','b88','unitsPerBox','boxQty','eaExtra','totalUnits','plt'];
 const GRID_INITIAL_ROWS = 30;
-let shipGrid = [];  // 엑셀 붙여넣기용 스프레드시트 그리드. [{code,name,b188,b88,qty,plt}, ...] (문자열 상태 그대로 보관)
+let shipGrid = [];  // 엑셀 붙여넣기용 스프레드시트 그리드. GRID_COLS 순서의 필드를 가진 행 배열 (문자열 상태 그대로 보관)
 let productAgg = [];
 let overrideItems = [];   // 마스터 등록으로 인해 PLT가 재계산된 상품 목록 (표시용)
 let missingPltItems = []; // PLT 값도 없고 마스터에도 없어 계산에서 제외된 상품 목록
@@ -484,7 +487,7 @@ function importMasterPaste(){
 }
 
 /* ---------------- shipment grid (엑셀 붙여넣기용 스프레드시트) ---------------- */
-function emptyGridRow(){ return {vendor:'', code:'', name:'', b188:'', b88:'', boxQty:'', qty:'', plt:''}; }
+function emptyGridRow(){ return {vendor:'', code:'', name:'', b188:'', b88:'', unitsPerBox:'', boxQty:'', eaExtra:'', totalUnits:'', plt:''}; }
 
 function initShipGrid(){
   shipGrid = Array.from({length:GRID_INITIAL_ROWS}, emptyGridRow);
@@ -575,7 +578,9 @@ function importShipGrid(){
     .map(r=>({
       vendor:(r.vendor||'').trim(), code:r.code.trim(), name:(r.name||'').trim(),
       b188:(r.b188||'').trim(), b88:(r.b88||'').trim(),
-      boxQty: Number(r.boxQty)||0, qty: Number(r.qty)||0, plt:(r.plt||'').toString().trim()
+      unitsPerBox: Number(r.unitsPerBox)||0, boxQty: Number(r.boxQty)||0,
+      eaExtra: Number(r.eaExtra)||0, totalUnits: Math.round(Number(r.totalUnits))||0,
+      plt:(r.plt||'').toString().trim()
     }));
   if(fullShipment.length===0){ flash('불러올 데이터가 없습니다. 표에 값을 채워주세요'); return; }
 
@@ -665,8 +670,9 @@ function renderShipment(){
       <td>${esc(it.name)}</td>
       <td class="mono">${esc(it.b188)}</td>
       <td class="mono">${esc(it.b88)}</td>
+      <td class="num mono">${it.unitsPerBox}</td>
       <td class="num mono">${it.boxQty}</td>
-      <td class="num mono">${it.qty}</td>
+      <td class="num mono">${it.totalUnits}</td>
       <td class="num mono">${r.plt===null ? '-' : fmtPlt(r.plt)}</td>
       <td>${note}</td>
     `;
@@ -680,7 +686,7 @@ function runCalculation(){
 
   overrideItems = [];
   missingPltItems = [];
-  const aggMap = {}; // code -> {code,name,b188,b88,totalBoxes,totalOccupancy}
+  const aggMap = {}; // code -> {code,name,b188,b88,totalUnits,totalOccupancy}
 
   const vendorNote = document.getElementById('result-vendor-note');
   const vendors = [...new Set(shipment.map(it=>it.vendor).filter(v=>v))];
@@ -693,8 +699,8 @@ function runCalculation(){
       overrideItems.push({...it, inputPlt: it.plt, newPlt: r.plt, cpBoxText: r.match.row.cpBox});
     }
     const key = it.code || it.name;
-    if(!aggMap[key]) aggMap[key] = {code:it.code, name:it.name, b188:it.b188, b88:it.b88, totalBoxes:0, totalOccupancy:0};
-    aggMap[key].totalBoxes += it.qty;
+    if(!aggMap[key]) aggMap[key] = {code:it.code, name:it.name, b188:it.b188, b88:it.b88, totalUnits:0, totalOccupancy:0};
+    aggMap[key].totalUnits += it.totalUnits;
     aggMap[key].totalOccupancy += r.plt;
   });
 
@@ -708,18 +714,19 @@ function runCalculation(){
     const occ = Math.round(a.totalOccupancy*10000)/10000;
     const fullCount = Math.floor(occ + 1e-9);
     const remainderOcc = Math.max(0, Math.round((occ - fullCount)*10000)/10000);
-    // 박스수/PLT 비율을 역산 (마스터 미등록 상품도 완충/잔여 파레트를 동일한 방식으로 나눌 수 있도록)
-    const boxesPerPlt = occ > 0 ? a.totalBoxes / occ : 0;
+    // 총낱개는 절대 소수점이 나오면 안 되므로, 완충 파레트 1개당 낱개수를 반올림한 정수로 고정하고
+    // 잔여분은 "총낱개 - 완충파레트가 가져간 만큼"으로 역산해서 자투리 없이 정확히 맞춘다.
+    const unitsPerFullPallet = occ > 0 ? Math.round(a.totalUnits / occ) : 0;
     for(let i=0;i<fullCount;i++){
       singlePallets.push({
         type:'single', fill:1,
-        items:[{code:a.code, name:a.name, b188:a.b188, b88:a.b88, boxes: boxesPerPlt || a.totalBoxes}]
+        items:[{code:a.code, name:a.name, b188:a.b188, b88:a.b88, units: unitsPerFullPallet}]
       });
     }
     if(remainderOcc > 1e-6){
       remainderPool.push({
         code:a.code, name:a.name, b188:a.b188, b88:a.b88,
-        boxes: Math.max(0, a.totalBoxes - fullCount*boxesPerPlt),
+        units: Math.max(0, a.totalUnits - unitsPerFullPallet*fullCount),
         occupancy: remainderOcc
       });
     }
@@ -792,6 +799,33 @@ function runCalculation(){
     });
     mixedPallets.push(...newBins.filter(b=>b.items.length>0));
   }
+
+  // 3) 위 단계로도 저충전 파레트가 여러 개 남으면 서로 합쳐서 개수를 줄인다.
+  //    0.8 캡(fill)은 안전마진이라 절대 넘지 않지만, SKU 7개 제한은 "가능하면 지키는" 기준이라
+  //    1차로는 7개 이하로 합칠 수 있는 것만 합치고, 그래도 남으면 2차로 7개를 넘기더라도 합친다.
+  function mergeMixedPallets(respectSkuCap){
+    let changed = true;
+    while(changed){
+      changed = false;
+      mixedPallets.sort((a,b)=> a.fill - b.fill);
+      for(let i=0; i<mixedPallets.length && !changed; i++){
+        for(let j=i+1; j<mixedPallets.length; j++){
+          const combinedFill = mixedPallets[i].fill + mixedPallets[j].fill;
+          const combinedSku = mixedPallets[i].items.length + mixedPallets[j].items.length;
+          if(combinedFill <= HARD_CAP + 1e-9 && (!respectSkuCap || combinedSku <= MAX_SKU)){
+            mixedPallets[i].items.push(...mixedPallets[j].items);
+            mixedPallets[i].fill = combinedFill;
+            mixedPallets.splice(j,1);
+            changed = true;
+            break;
+          }
+        }
+      }
+    }
+  }
+  mergeMixedPallets(true);  // 1차: SKU 7개 이하로 유지되는 병합만
+  mergeMixedPallets(false); // 2차: 그래도 저충전 파레트가 남으면 SKU 제한 무시하고 병합 (fill 캡은 유지)
+
   // 단일 아이템만 남은 mixed pallet은 '단일(잔여)'로 표기
   mixedPallets = mixedPallets.map(p=> ({...p, type: p.items.length>1 ? 'mixed' : 'leftover'}));
 
@@ -826,7 +860,7 @@ function renderMissingPlt(){
   missingPltItems.forEach(it=>{
     const tr = document.createElement('tr');
     tr.innerHTML = `<td class="mono">${esc(it.code)}</td><td>${esc(it.name)}</td>
-      <td class="num mono">${it.boxQty}</td><td class="num mono">${it.qty}</td><td>${esc(it.plt) || '(비어있음)'}</td>`;
+      <td class="num mono">${it.boxQty}</td><td class="num mono">${it.totalUnits}</td><td>${esc(it.plt) || '(비어있음)'}</td>`;
     tbody.appendChild(tr);
   });
 }
@@ -893,7 +927,7 @@ function openPalletDetail(idx){
   document.getElementById('detail-fill').innerHTML = `${p.fill.toFixed(2)}<span style="font-size:12px; color:var(--ink-soft); font-weight:500;"> PLT</span>`;
   document.getElementById('detail-tbody').innerHTML = p.items.map(it=>`<tr><td class="mono">${esc(it.code)}</td><td>${esc(it.name)}</td>
     <td class="mono">${esc(it.b188)}</td><td class="mono">${esc(it.b88)}</td>
-    <td class="num mono">${Number(it.boxes).toFixed(2)}</td>
+    <td class="num mono">${Math.round(it.units)}</td>
     <td class="num mono">${(it.occupancy!==undefined ? it.occupancy : 1).toFixed(2)}</td></tr>`).join('');
   document.getElementById('detail-position').textContent = `${idx+1} / ${pallets.length}`;
   document.getElementById('detail-prev-btn').disabled = idx<=0;
