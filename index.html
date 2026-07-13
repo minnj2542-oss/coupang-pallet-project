@@ -725,13 +725,14 @@ function runCalculation(){
     }
   });
 
-  remainderPool.sort((x,y)=> y.occupancy - x.occupancy);
+  const HARD_CAP = 0.8, MAX_SKU = 7, SMALL_THRESHOLD = 0.1;
+  const bigItems = remainderPool.filter(it=>it.occupancy >= SMALL_THRESHOLD).sort((x,y)=> y.occupancy - x.occupancy);
+  const smallItems = remainderPool.filter(it=>it.occupancy < SMALL_THRESHOLD).sort((x,y)=> y.occupancy - x.occupancy);
 
-  // Best-Fit-Decreasing: 큰 자투리부터, "들어갈 수 있는 파레트 중 가장 꽉 채워지는(남는 공간이 가장 적은)" 곳에 넣는다.
-  // (기존 First-Fit은 뒤쪽에 자투리가 몰려서 0.8에 한참 못 미치는 파레트가 여러 개 남는 문제가 있었음)
   let mixedPallets = [];
-  const HARD_CAP = 0.8, MAX_SKU = 7;
-  remainderPool.forEach(item=>{
+
+  // 1) 큰 자투리(0.1 이상)는 Best-Fit-Decreasing: "들어갈 수 있는 파레트 중 가장 꽉 채워지는(남는 공간이 가장 적은)" 곳에 넣는다.
+  bigItems.forEach(item=>{
     let bestPallet = null, bestRemaining = Infinity;
     for(const p of mixedPallets){
       if(p.items.length >= MAX_SKU) continue;
@@ -746,6 +747,51 @@ function runCalculation(){
       mixedPallets.push({type: 'mixed', fill:item.occupancy, items:[item]});
     }
   });
+
+  // 2) 작은 자투리(0.1 미만)는 두 단계로 처리한다.
+  //    2-1) 먼저 1)에서 만든 파레트들의 남는 공간(gap)에 Best-Fit으로 최대한 채워 넣는다.
+  //    2-2) 그러고도 남는 것들은 "새 파레트 몇 개가 필요한지" 미리 계산해서 라운드로빈으로 고르게 나눠 담는다.
+  //    (한 파레트를 SKU 7개까지 다 채우고서야 다음 파레트로 넘어가면, 작은 조각들이 앞쪽 파레트에 몰리고
+  //     뒤쪽엔 SKU/PLT 둘 다 어중간한 파레트가 여러 개 남는 문제가 있었음)
+  const leftoverSmall = [];
+  smallItems.forEach(item=>{
+    let bestPallet = null, bestRemaining = Infinity;
+    for(const p of mixedPallets){
+      if(p.items.length >= MAX_SKU) continue;
+      const after = p.fill + item.occupancy;
+      if(after > HARD_CAP + 1e-9) continue;
+      const remaining = HARD_CAP - after;
+      if(remaining < bestRemaining){ bestRemaining = remaining; bestPallet = p; }
+    }
+    if(bestPallet){
+      bestPallet.items.push(item); bestPallet.fill += item.occupancy;
+    } else {
+      leftoverSmall.push(item);
+    }
+  });
+
+  if(leftoverSmall.length){
+    const totalMass = leftoverSmall.reduce((s,it)=>s+it.occupancy, 0);
+    const binCount = Math.max(1, Math.ceil(totalMass / HARD_CAP), Math.ceil(leftoverSmall.length / MAX_SKU));
+    const newBins = Array.from({length:binCount}, ()=>({type:'mixed', fill:0, items:[]}));
+    let cursor = 0;
+    leftoverSmall.forEach(item=>{
+      let placed = false;
+      for(let k=0;k<newBins.length;k++){
+        const bin = newBins[(cursor+k) % newBins.length];
+        if(bin.items.length < MAX_SKU && bin.fill + item.occupancy <= HARD_CAP + 1e-9){
+          bin.items.push(item); bin.fill += item.occupancy;
+          cursor = (cursor+k+1) % newBins.length;
+          placed = true;
+          break;
+        }
+      }
+      if(!placed){
+        newBins.push({type:'mixed', fill:item.occupancy, items:[item]});
+      }
+    });
+    mixedPallets.push(...newBins.filter(b=>b.items.length>0));
+  }
   // 단일 아이템만 남은 mixed pallet은 '단일(잔여)'로 표기
   mixedPallets = mixedPallets.map(p=> ({...p, type: p.items.length>1 ? 'mixed' : 'leftover'}));
 
