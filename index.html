@@ -179,6 +179,7 @@
     </div>
     <nav class="tabs">
       <button data-tab="calc" class="active">상차리스트 입력 &amp; 계산</button>
+      <button data-tab="unitref">단위 기준표</button>
       <button data-tab="master">재적 마스터관리 <span style="opacity:.6; font-weight:500;">(보조)</span></button>
     </nav>
   </header>
@@ -206,8 +207,8 @@
             <tr>
               <th style="width:100px;">상품코드</th>
               <th>상품명</th>
-              <th style="width:120px;">쿠팡박스수 / PLT</th>
-              <th style="width:120px;">BOX당 낱개수</th>
+              <th style="width:120px;">박스수 / PLT</th>
+              <th style="width:180px;">쿠팡박스수 / PLT</th>
               <th style="width:30px;"></th>
             </tr>
           </thead>
@@ -215,6 +216,42 @@
         </table>
       </div>
       <div id="master-empty" class="empty" style="display:none; margin-top:12px;">등록된 상품이 없습니다. 위에서 행을 추가하거나 엑셀을 붙여넣어 시작하세요.</div>
+    </div>
+  </section>
+
+  <!-- ============ UNIT REFERENCE TAB ============ -->
+  <section class="panel" id="panel-unitref">
+
+    <div class="card">
+      <h2>단위 기준표 <span class="eyebrow">전 상품 PLT당 박스량 · 박스당 낱개수</span></h2>
+      <p class="sub">상차리스트에 입력된 PLT가 반올림된 값이어도, 여기 등록된 상품코드는 <b>BOX ÷ PLT당 박스량</b>으로 정밀하게 재계산해서 사용합니다.</p>
+      <div class="row" style="margin-bottom:14px;">
+        <button class="btn btn-dark btn-sm" onclick="addUnitRefRow()">+ 행 추가</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleUnitRefImportBox()">엑셀 붙여넣기로 가져오기</button>
+      </div>
+
+      <div id="unitref-import-box" style="display:none; margin-bottom:16px;">
+        <textarea id="unitref-paste" placeholder="여기에 엑셀에서 복사한 내용을 붙여넣으세요 (Tab으로 구분): 상품코드 · 상품명 · PLT당 박스량 · 박스당 낱개수"></textarea>
+        <div class="row" style="margin-top:8px;">
+          <button class="btn btn-primary btn-sm" onclick="importUnitRefPaste()">가져오기 (상품코드 기준 갱신/추가)</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table id="unitref-table">
+          <thead>
+            <tr>
+              <th style="width:100px;">상품코드</th>
+              <th>상품명</th>
+              <th style="width:120px;">PLT당 박스량</th>
+              <th style="width:120px;">박스당 낱개수</th>
+              <th style="width:30px;"></th>
+            </tr>
+          </thead>
+          <tbody id="unitref-tbody"></tbody>
+        </table>
+      </div>
+      <div id="unitref-empty" class="empty" style="display:none; margin-top:12px;">등록된 상품이 없습니다. 위에서 행을 추가하거나 엑셀을 붙여넣어 시작하세요.</div>
     </div>
   </section>
 
@@ -287,17 +324,17 @@
       </div>
 
       <div id="override-card" class="card" style="display:none;">
-        <h2>🔁 마스터 기준으로 재계산된 상품 <span class="eyebrow">쿠팡박스수/PLT 적용됨</span></h2>
-        <p class="sub">아래 상품은 재적 마스터리스트에 등록되어 있어, 입력된 PLT 대신 <b>BOX ÷ 쿠팡박스수/PLT</b>로 다시 계산한 값을 사용했습니다.</p>
+        <h2>🔁 단위 기준표로 정밀 재계산된 상품 <span class="eyebrow">PLT당 박스량 적용됨</span></h2>
+        <p class="sub">아래 상품은 단위 기준표에 등록되어 있어, 입력된 PLT(반올림됐을 수 있음) 대신 <b>BOX ÷ PLT당 박스량</b>으로 정밀하게 계산한 값을 사용했습니다.</p>
         <div class="table-wrap"><table>
-          <thead><tr><th>상품코드</th><th>상품명</th><th class="num">BOX</th><th class="num">입력 PLT</th><th class="num">재계산 PLT</th><th>쿠팡박스수/PLT</th></tr></thead>
+          <thead><tr><th>상품코드</th><th>상품명</th><th class="num">BOX</th><th class="num">입력 PLT</th><th class="num">재계산 PLT</th><th>PLT당 박스량</th></tr></thead>
           <tbody id="override-tbody"></tbody>
         </table></div>
       </div>
 
       <div id="missingplt-card" class="card" style="display:none;">
         <h2>⚠️ PLT 값 누락 상품 <span class="eyebrow" style="background:var(--danger-bg); color:var(--danger);">계산 제외</span></h2>
-        <p class="sub">아래 상품은 PLT 값이 비어있거나 숫자가 아니고, 마스터리스트에도 등록되어 있지 않아 계산에서 제외됐습니다.</p>
+        <p class="sub">아래 상품은 PLT 값이 비어있거나 숫자가 아니고, 단위 기준표에도 등록되어 있지 않아 계산에서 제외됐습니다.</p>
         <div class="table-wrap"><table>
           <thead><tr><th>상품코드</th><th>상품명</th><th class="num">BOX</th><th class="num">총낱개</th><th>입력 PLT</th></tr></thead>
           <tbody id="missingplt-tbody"></tbody>
@@ -352,7 +389,9 @@
 <script>
 /* ---------------- storage ---------------- */
 const MASTER_KEY = 'master-list';
-let master = [];   // {id, code, name, cpBox, unitsPerBox}  cpBox=쿠팡박스수/PLT(파레트당 박스수, "48 (8방 * 6단)"처럼 텍스트가 섞여 있을 수 있어 숫자는 cpBoxNum()으로 추출), unitsPerBox=BOX당 낱개수
+let master = [];   // {id, code, name, ownBox, cpBox}  재적 마스터(용도: 입고 파레트→쿠팡 출고 변환, 계산 로직에선 미사용). cpBox는 "48 (8방 * 6단)" 같은 원문 텍스트, 숫자는 cpBoxNum()으로 추출
+const UNITREF_KEY = 'unit-reference-list';
+let unitRef = [];  // {id, code, name, cpBox, unitsPerBox}  전 상품 단위 기준표. cpBox=PLT당 박스량, unitsPerBox=박스당 낱개수. resolveItemPlt에서 정밀 PLT 역산에 사용.
 let fullShipment = []; // 거래처 필터링 전, 그리드에서 불러온 전체 상차리스트
 let shipment = [];  // {vendor, code, name, b188, b88, unitsPerBox, boxQty, eaExtra, totalUnits, plt}
                     // unitsPerBox=BOX입수, boxQty=BOX(박스수), eaExtra=EA(항상 0에 가까움, 미사용), totalUnits=총낱개(항상 정수), plt=입력된 PLT값
@@ -395,6 +434,29 @@ async function saveMaster(){
   }
 }
 
+async function loadUnitRef(){
+  try{
+    const raw = localStorage.getItem(UNITREF_KEY);
+    unitRef = raw ? JSON.parse(raw) : [];
+  }catch(e){
+    unitRef = [];
+  }
+  renderUnitRef();
+}
+let unitRefSaveTimer = null;
+function saveUnitRefDebounced(){
+  clearTimeout(unitRefSaveTimer);
+  unitRefSaveTimer = setTimeout(saveUnitRef, 500);
+}
+async function saveUnitRef(){
+  try{
+    localStorage.setItem(UNITREF_KEY, JSON.stringify(unitRef));
+  }catch(e){
+    console.error('저장 실패', e);
+    flash('⚠️ 저장에 실패했습니다. 브라우저 저장공간을 확인해주세요.');
+  }
+}
+
 /* ---------------- tabs ---------------- */
 document.querySelectorAll('nav.tabs button').forEach(btn=>{
   btn.addEventListener('click', ()=>{
@@ -415,8 +477,8 @@ function renderMaster(){
     tr.innerHTML = `
       <td><input value="${esc(row.code)}" oninput="updateMaster('${row.id}','code',this.value)"></td>
       <td><input value="${esc(row.name)}" oninput="updateMaster('${row.id}','name',this.value)"></td>
+      <td><input class="num" value="${row.ownBox ?? ''}" oninput="updateMaster('${row.id}','ownBox',this.value)"></td>
       <td><input value="${esc(row.cpBox)}" placeholder="예: 48 (8방 * 6단)" oninput="updateMaster('${row.id}','cpBox',this.value)"></td>
-      <td><input class="num" value="${row.unitsPerBox ?? ''}" oninput="updateMaster('${row.id}','unitsPerBox',this.value)"></td>
       <td><button class="btn btn-danger btn-sm" style="padding:4px 8px;" onclick="deleteMaster('${row.id}')">✕</button></td>
     `;
     tbody.appendChild(tr);
@@ -425,7 +487,7 @@ function renderMaster(){
 function esc(v){ return (v===undefined||v===null) ? '' : String(v).replace(/"/g,'&quot;'); }
 
 function addMasterRow(){
-  master.push({id:uid(), code:'', name:'', cpBox:'', unitsPerBox:''});
+  master.push({id:uid(), code:'', name:'', ownBox:'', cpBox:''});
   renderMaster();
   saveMasterDebounced();
   const tbody = document.getElementById('master-tbody');
@@ -435,7 +497,7 @@ function addMasterRow(){
 function updateMaster(id, field, value){
   const row = master.find(r=>r.id===id);
   if(!row) return;
-  row[field] = field==='unitsPerBox' ? (value===''? '' : Number(value)) : value;
+  row[field] = field==='ownBox' ? (value===''? '' : Number(value)) : value;
   saveMasterDebounced();
 }
 // "48 (8방 * 6단)" 같은 문자열에서 맨 앞 숫자(쿠팡 박스수/PLT)만 추출
@@ -470,12 +532,12 @@ function importMasterPaste(){
   let added=0, updated=0;
   rows.forEach(c=>{
     if(!c[0]) return;
-    const [code,name,cpBox,unitsPerBox] = c;
+    const [code,name,ownBox,cpBox] = c;
     const existing = master.find(r=>r.code===code);
     const data = {
       code: code||'', name:name||'',
-      cpBox: cpBox||'',
-      unitsPerBox: unitsPerBox? Number(unitsPerBox): ''
+      ownBox: ownBox? Number(ownBox): '',
+      cpBox: cpBox||''
     };
     if(existing){ Object.assign(existing, data); updated++; }
     else { master.push({id:uid(), ...data}); added++; }
@@ -483,6 +545,71 @@ function importMasterPaste(){
   renderMaster();
   saveMaster();
   document.getElementById('master-paste').value='';
+  flash(`가져오기 완료: 신규 ${added}건 / 갱신 ${updated}건`);
+}
+
+/* ---------------- 단위 기준표 (전 상품 PLT당박스량/박스당낱개수) ---------------- */
+function renderUnitRef(){
+  const tbody = document.getElementById('unitref-tbody');
+  tbody.innerHTML = '';
+  document.getElementById('unitref-empty').style.display = unitRef.length ? 'none' : 'block';
+  unitRef.forEach(row=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input value="${esc(row.code)}" oninput="updateUnitRef('${row.id}','code',this.value)"></td>
+      <td><input value="${esc(row.name)}" oninput="updateUnitRef('${row.id}','name',this.value)"></td>
+      <td><input class="num" value="${row.cpBox ?? ''}" oninput="updateUnitRef('${row.id}','cpBox',this.value)"></td>
+      <td><input class="num" value="${row.unitsPerBox ?? ''}" oninput="updateUnitRef('${row.id}','unitsPerBox',this.value)"></td>
+      <td><button class="btn btn-danger btn-sm" style="padding:4px 8px;" onclick="deleteUnitRef('${row.id}')">✕</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+function addUnitRefRow(){
+  unitRef.push({id:uid(), code:'', name:'', cpBox:'', unitsPerBox:''});
+  renderUnitRef();
+  saveUnitRefDebounced();
+  const tbody = document.getElementById('unitref-tbody');
+  const lastRow = tbody.lastElementChild;
+  if(lastRow) lastRow.scrollIntoView({behavior:'auto', block:'center'});
+}
+function updateUnitRef(id, field, value){
+  const row = unitRef.find(r=>r.id===id);
+  if(!row) return;
+  row[field] = (field==='cpBox' || field==='unitsPerBox') ? (value===''? '' : Number(value)) : value;
+  saveUnitRefDebounced();
+}
+function deleteUnitRef(id){
+  unitRef = unitRef.filter(r=>r.id!==id);
+  renderUnitRef();
+  saveUnitRefDebounced();
+  flash('삭제되었습니다');
+}
+function toggleUnitRefImportBox(){
+  const box = document.getElementById('unitref-import-box');
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+function importUnitRefPaste(){
+  const text = document.getElementById('unitref-paste').value;
+  if(!text.trim()){ flash('붙여넣을 내용이 없습니다'); return; }
+  let rows = splitRows(text);
+  if(rows.length && /상품코드|거래처명|고객사/.test(rows[0].join(''))){ rows = rows.slice(1); }
+  let added=0, updated=0;
+  rows.forEach(c=>{
+    if(!c[0]) return;
+    const [code,name,cpBox,unitsPerBox] = c;
+    const existing = unitRef.find(r=>r.code===code);
+    const data = {
+      code: code||'', name:name||'',
+      cpBox: cpBox? Number(cpBox): '',
+      unitsPerBox: unitsPerBox? Number(unitsPerBox): ''
+    };
+    if(existing){ Object.assign(existing, data); updated++; }
+    else { unitRef.push({id:uid(), ...data}); added++; }
+  });
+  renderUnitRef();
+  saveUnitRef();
+  document.getElementById('unitref-paste').value='';
   flash(`가져오기 완료: 신규 ${added}건 / 갱신 ${updated}건`);
 }
 
@@ -621,21 +748,21 @@ function selectVendor(vendor){
 
 function last5(s){ s = (s||'').toString().trim(); return s.length<=5? s : s.slice(-5); }
 
-function findMasterFor(item){
+function findUnitRefFor(item){
   if(!item.code && !item.name) return null;
-  let m = master.find(r=> r.code && item.code && r.code===item.code);
+  let m = unitRef.find(r=> r.code && item.code && r.code===item.code);
   if(m) return {row:m, via:'상품코드'};
-  m = master.find(r=> r.name && item.name && r.name.trim()===item.name.trim());
+  m = unitRef.find(r=> r.name && item.name && r.name.trim()===item.name.trim());
   if(m) return {row:m, via:'상품명'};
   return null;
 }
 
 // 상차리스트 한 줄에 대해 실제 계산에 쓸 PLT를 결정.
-// 마스터에 등록된 상품(쿠팡박스수/PLT 확인 가능)이면 박스수÷쿠팡박스수로 재계산해서 입력값을 덮어쓰고,
-// 그 외(대부분)는 입력된 PLT를 그대로 신뢰해서 사용한다.
-// (쿠팡박스수/PLT는 "박스" 단위 비율이라, 낱개수가 아니라 박스수로 나눠야 단위가 맞는다)
+// 단위 기준표에 등록된 상품(PLT당 박스량 확인 가능)이면 박스수÷PLT당박스량으로 정밀하게 재계산해서
+// 입력된(반올림됐을 수 있는) PLT를 덮어쓰고, 기준표에 없는 상품은 입력된 PLT를 그대로 신뢰해서 사용한다.
+// (PLT당 박스량은 "박스" 단위 비율이라, 낱개수가 아니라 박스수로 나눠야 단위가 맞는다)
 function resolveItemPlt(item){
-  const match = findMasterFor(item);
+  const match = findUnitRefFor(item);
   if(match){
     const cpNum = cpBoxNum(match.row.cpBox);
     if(cpNum && item.boxQty){
@@ -661,7 +788,7 @@ function renderShipment(){
     const r = resolveItemPlt(it);
     let note;
     if(r.plt===null) note = `<span class="pill pill-bad">PLT 없음</span>`;
-    else if(r.overridden) note = `<span class="pill pill-mix">마스터 재적용</span>`;
+    else if(r.overridden) note = `<span class="pill pill-mix">단위 기준표 재적용</span>`;
     else note = `<span class="pill pill-ok">입력값 사용</span>`;
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -949,6 +1076,7 @@ function closePalletDetail(){
 
 /* ---------------- init ---------------- */
 loadMaster();
+loadUnitRef();
 initShipGrid();
 </script>
 </body>
