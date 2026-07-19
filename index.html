@@ -206,8 +206,8 @@
             <tr>
               <th style="width:100px;">상품코드</th>
               <th>상품명</th>
-              <th style="width:120px;">박스수 / PLT</th>
-              <th style="width:180px;">쿠팡박스수 / PLT</th>
+              <th style="width:120px;">쿠팡박스수 / PLT</th>
+              <th style="width:120px;">BOX당 낱개수</th>
               <th style="width:30px;"></th>
             </tr>
           </thead>
@@ -352,7 +352,7 @@
 <script>
 /* ---------------- storage ---------------- */
 const MASTER_KEY = 'master-list';
-let master = [];   // {id, code, name, ownBox, cpBox}  cpBox는 "48 (8방 * 6단)" 같은 원문 텍스트, 숫자는 cpBoxNum()으로 추출
+let master = [];   // {id, code, name, cpBox, unitsPerBox}  cpBox=쿠팡박스수/PLT(파레트당 박스수, "48 (8방 * 6단)"처럼 텍스트가 섞여 있을 수 있어 숫자는 cpBoxNum()으로 추출), unitsPerBox=BOX당 낱개수
 let fullShipment = []; // 거래처 필터링 전, 그리드에서 불러온 전체 상차리스트
 let shipment = [];  // {vendor, code, name, b188, b88, unitsPerBox, boxQty, eaExtra, totalUnits, plt}
                     // unitsPerBox=BOX입수, boxQty=BOX(박스수), eaExtra=EA(항상 0에 가까움, 미사용), totalUnits=총낱개(항상 정수), plt=입력된 PLT값
@@ -415,8 +415,8 @@ function renderMaster(){
     tr.innerHTML = `
       <td><input value="${esc(row.code)}" oninput="updateMaster('${row.id}','code',this.value)"></td>
       <td><input value="${esc(row.name)}" oninput="updateMaster('${row.id}','name',this.value)"></td>
-      <td><input class="num" value="${row.ownBox ?? ''}" oninput="updateMaster('${row.id}','ownBox',this.value)"></td>
       <td><input value="${esc(row.cpBox)}" placeholder="예: 48 (8방 * 6단)" oninput="updateMaster('${row.id}','cpBox',this.value)"></td>
+      <td><input class="num" value="${row.unitsPerBox ?? ''}" oninput="updateMaster('${row.id}','unitsPerBox',this.value)"></td>
       <td><button class="btn btn-danger btn-sm" style="padding:4px 8px;" onclick="deleteMaster('${row.id}')">✕</button></td>
     `;
     tbody.appendChild(tr);
@@ -425,7 +425,7 @@ function renderMaster(){
 function esc(v){ return (v===undefined||v===null) ? '' : String(v).replace(/"/g,'&quot;'); }
 
 function addMasterRow(){
-  master.push({id:uid(), code:'', name:'', ownBox:'', cpBox:''});
+  master.push({id:uid(), code:'', name:'', cpBox:'', unitsPerBox:''});
   renderMaster();
   saveMasterDebounced();
   const tbody = document.getElementById('master-tbody');
@@ -435,7 +435,7 @@ function addMasterRow(){
 function updateMaster(id, field, value){
   const row = master.find(r=>r.id===id);
   if(!row) return;
-  row[field] = field==='ownBox' ? (value===''? '' : Number(value)) : value;
+  row[field] = field==='unitsPerBox' ? (value===''? '' : Number(value)) : value;
   saveMasterDebounced();
 }
 // "48 (8방 * 6단)" 같은 문자열에서 맨 앞 숫자(쿠팡 박스수/PLT)만 추출
@@ -470,12 +470,12 @@ function importMasterPaste(){
   let added=0, updated=0;
   rows.forEach(c=>{
     if(!c[0]) return;
-    const [code,name,ownBox,cpBox] = c;
+    const [code,name,cpBox,unitsPerBox] = c;
     const existing = master.find(r=>r.code===code);
     const data = {
       code: code||'', name:name||'',
-      ownBox: ownBox? Number(ownBox): '',
-      cpBox: cpBox||''
+      cpBox: cpBox||'',
+      unitsPerBox: unitsPerBox? Number(unitsPerBox): ''
     };
     if(existing){ Object.assign(existing, data); updated++; }
     else { master.push({id:uid(), ...data}); added++; }
