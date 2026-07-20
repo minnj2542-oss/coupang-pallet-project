@@ -1009,12 +1009,13 @@ function renderResults(){
   }
   list.innerHTML = pallets.map((p, idx)=>{
     const {typeLabel, pillClass} = palletTypeInfo(p);
+    const totalUnitsInPallet = p.items.reduce((s,it)=>s+it.units, 0);
     return `
       <div class="pallet-row" data-idx="${idx}" onclick="openPalletDetail(${idx})">
         <div class="stack">${stackHtml(p.fill)}</div>
         <div class="pallet-info">
           <div class="id disp">PLT ${idx+1}</div>
-          <div class="meta"><span class="pill ${pillClass}">${typeLabel}</span> · SKU ${p.items.length}개</div>
+          <div class="meta"><span class="pill ${pillClass}">${typeLabel}</span> · SKU ${p.items.length}개 · 총 ${totalUnitsInPallet.toLocaleString()}개</div>
         </div>
         <div class="fill-num">${p.fill.toFixed(2)}<span style="font-size:11px; color:var(--ink-soft); font-weight:500;"> PLT</span></div>
         <div class="arrow">›</div>
