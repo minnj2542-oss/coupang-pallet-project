@@ -325,7 +325,7 @@
 
       <div id="missingplt-card" class="card" style="display:none;">
         <h2>⚠️ PLT 값 누락 상품 <span class="eyebrow" style="background:var(--danger-bg); color:var(--danger);">계산 제외</span></h2>
-        <p class="sub">아래 상품은 PLT 값이 비어있거나 숫자가 아니어서 계산에서 제외됐습니다.</p>
+        <p class="sub">아래 상품은 PLT 값이 비어있거나 0 이하이고, 단위 기준표에도 등록되어 있지 않아 재적을 계산할 방법이 없어서 제외됐습니다.</p>
         <div class="table-wrap"><table>
           <thead><tr><th>상품코드</th><th>상품명</th><th class="num">BOX</th><th class="num">총낱개</th><th>입력 PLT</th></tr></thead>
           <tbody id="missingplt-tbody"></tbody>
@@ -390,7 +390,7 @@ const GRID_COLS = ['vendor','code','name','b188','b88','unitsPerBox','boxQty','e
 const GRID_INITIAL_ROWS = 30;
 let shipGrid = [];  // 엑셀 붙여넣기용 스프레드시트 그리드. GRID_COLS 순서의 필드를 가진 행 배열 (문자열 상태 그대로 보관)
 let productAgg = [];
-let missingPltItems = []; // PLT 값이 비어있거나 숫자가 아니어서 계산에서 제외된 상품 목록
+let missingPltItems = []; // PLT가 0 이하/빈값이고 단위 기준표에도 없어 재적 불가능한 상품 목록
 let pallets = [];
 
 function flash(msg){
@@ -754,12 +754,19 @@ function findUnitRefFor(item){
 }
 
 // 상차리스트 한 줄에 대해 실제 계산에 쓸 PLT를 결정.
-// 입력된 PLT는 기준값이라 절대 바꾸지 않고 그대로 사용한다 (단위 기준표는 PLT를 재계산하는 데 쓰지 않음 —
-// 아래 unitsForFullPallet()에서 "1PLT=몇 개"를 정밀하게 정수로 맞추는 데만 조용히 사용됨).
+// 원칙: 입력된 PLT(0보다 큰 정상값)는 기준값이라 절대 바꾸지 않고 그대로 사용한다.
+// 다만 PLT가 0/빈값/음수면(엑셀에서 반올림되며 소수점 정보가 날아간 경우 등) 재적이 통째로
+// 빠지는 게 가장 나쁘므로, 단위 기준표에 등록된 상품이면 박스수÷PLT당박스량으로 재적을 살려낸다.
+// (재적이 빠지지 않는 것을 최우선으로 한다 — 정상 PLT가 있는 경우엔 이 로직이 절대 개입하지 않음)
 function resolveItemPlt(item){
   const inputPlt = parseNum(item.plt);
-  if(!isNaN(inputPlt)){
+  if(!isNaN(inputPlt) && inputPlt > 0){
     return { plt: inputPlt };
+  }
+  const ref = findUnitRefFor(item);
+  const cpNum = ref ? cpBoxNum(ref.row.cpBox) : 0;
+  if(cpNum && item.boxQty > 0){
+    return { plt: item.boxQty / cpNum, filled:true };
   }
   return { plt: null };
 }
