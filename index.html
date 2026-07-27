@@ -335,7 +335,10 @@
 
       <div class="stat-row">
         <div class="stat"><div class="n" id="stat-plt">0</div><div class="l">총 파레트 수</div></div>
-        <div class="stat"><div class="n" id="stat-totalfill">0.00</div><div class="l">총 재적 PLT (합산)</div></div>
+        <div class="stat"><div class="n" id="stat-beforeplt">0.00</div><div class="l">재적 전 총 PLT</div></div>
+        <div class="stat"><div class="n" id="stat-totalfill">0.00</div><div class="l">재적 후 총 PLT (합산)</div></div>
+        <div class="stat"><div class="n" id="stat-minplt">0</div><div class="l">이론상 최소 파레트 수</div></div>
+        <div class="stat"><div class="n" id="stat-totalunits">0</div><div class="l">낱개 총합</div></div>
         <div class="stat"><div class="n" id="stat-single">0</div><div class="l">완충(단일 SKU) 파레트</div></div>
         <div class="stat"><div class="n" id="stat-mixed">0</div><div class="l">혼적 파레트</div></div>
       </div>
@@ -883,17 +886,20 @@ function runCalculation(){
     }
   });
 
-  const HARD_CAP = 0.8, MAX_SKU = 7, SMALL_THRESHOLD = 0.1;
+  const HARD_CAP = 0.8, MAX_SKU = 7, ABSOLUTE_MAX_SKU = 10, SMALL_THRESHOLD = 0.1;
   const bigItems = remainderPool.filter(it=>it.occupancy >= SMALL_THRESHOLD).sort((x,y)=> y.occupancy - x.occupancy);
   const smallItems = remainderPool.filter(it=>it.occupancy < SMALL_THRESHOLD).sort((x,y)=> y.occupancy - x.occupancy);
 
   let mixedPallets = [];
 
   // 1) 큰 자투리(0.1 이상)는 Best-Fit-Decreasing: "들어갈 수 있는 파레트 중 가장 꽉 채워지는(남는 공간이 가장 적은)" 곳에 넣는다.
+  // 다양한 SKU를 최대한 섞어서 파레트 수 자체를 줄이는 게 우선이라, 배치 단계부터 진짜 하드캡인
+  // ABSOLUTE_MAX_SKU(10)까지 채운다 (2026-07-15 — 예전엔 여기서 7에 막혀 불필요하게 새 파레트가
+  // 만들어졌고, 병합 단계가 그걸 다시 합치느라 이론적 최소치보다 파레트가 더 많이 나왔음).
   bigItems.forEach(item=>{
     let bestPallet = null, bestRemaining = Infinity;
     for(const p of mixedPallets){
-      if(p.items.length >= MAX_SKU) continue;
+      if(p.items.length >= ABSOLUTE_MAX_SKU) continue;
       const after = p.fill + item.occupancy;
       if(after > HARD_CAP + 1e-9) continue;
       const remaining = HARD_CAP - after;
@@ -915,7 +921,7 @@ function runCalculation(){
   smallItems.forEach(item=>{
     let bestPallet = null, bestRemaining = Infinity;
     for(const p of mixedPallets){
-      if(p.items.length >= MAX_SKU) continue;
+      if(p.items.length >= ABSOLUTE_MAX_SKU) continue;
       const after = p.fill + item.occupancy;
       if(after > HARD_CAP + 1e-9) continue;
       const remaining = HARD_CAP - after;
@@ -930,14 +936,14 @@ function runCalculation(){
 
   if(leftoverSmall.length){
     const totalMass = leftoverSmall.reduce((s,it)=>s+it.occupancy, 0);
-    const binCount = Math.max(1, Math.ceil(totalMass / HARD_CAP), Math.ceil(leftoverSmall.length / MAX_SKU));
+    const binCount = Math.max(1, Math.ceil(totalMass / HARD_CAP), Math.ceil(leftoverSmall.length / ABSOLUTE_MAX_SKU));
     const newBins = Array.from({length:binCount}, ()=>({type:'mixed', fill:0, items:[]}));
     let cursor = 0;
     leftoverSmall.forEach(item=>{
       let placed = false;
       for(let k=0;k<newBins.length;k++){
         const bin = newBins[(cursor+k) % newBins.length];
-        if(bin.items.length < MAX_SKU && bin.fill + item.occupancy <= HARD_CAP + 1e-9){
+        if(bin.items.length < ABSOLUTE_MAX_SKU && bin.fill + item.occupancy <= HARD_CAP + 1e-9){
           bin.items.push(item); bin.fill += item.occupancy;
           cursor = (cursor+k+1) % newBins.length;
           placed = true;
@@ -952,9 +958,11 @@ function runCalculation(){
   }
 
   // 3) 위 단계로도 저충전 파레트가 여러 개 남으면 서로 합쳐서 개수를 줄인다.
-  //    0.8 캡(fill)은 안전마진이라 절대 넘지 않지만, SKU 7개 제한은 "가능하면 지키는" 기준이라
-  //    1차로는 7개 이하로 합칠 수 있는 것만 합치고, 그래도 남으면 2차로 7개를 넘기더라도 합친다.
-  function mergeMixedPallets(respectSkuCap){
+  //    0.8 캡(fill)과 10개 SKU 캡은 절대 넘지 않는 진짜 하드 캡이고, SKU 7개는 "가능하면 지키는"
+  //    소프트 기준이라 1차로는 7개 이하로 합칠 수 있는 것만 합치고, 그래도 남으면 2차로 7개는
+  //    넘기더라도 10개까지는 합친다 (2026-07-15: 병합 단계에서 SKU 제한을 완전히 무시해버려서
+  //    한 파레트에 17개 SKU까지 몰리던 문제 발견 — 10개를 진짜 상한으로 고정).
+  function mergeMixedPallets(skuCap){
     let changed = true;
     while(changed){
       changed = false;
@@ -963,7 +971,7 @@ function runCalculation(){
         for(let j=i+1; j<mixedPallets.length; j++){
           const combinedFill = mixedPallets[i].fill + mixedPallets[j].fill;
           const combinedSku = mixedPallets[i].items.length + mixedPallets[j].items.length;
-          if(combinedFill <= HARD_CAP + 1e-9 && (!respectSkuCap || combinedSku <= MAX_SKU)){
+          if(combinedFill <= HARD_CAP + 1e-9 && combinedSku <= skuCap){
             mixedPallets[i].items.push(...mixedPallets[j].items);
             mixedPallets[i].fill = combinedFill;
             mixedPallets.splice(j,1);
@@ -974,8 +982,85 @@ function runCalculation(){
       }
     }
   }
-  mergeMixedPallets(true);  // 1차: SKU 7개 이하로 유지되는 병합만
-  mergeMixedPallets(false); // 2차: 그래도 저충전 파레트가 남으면 SKU 제한 무시하고 병합 (fill 캡은 유지)
+  mergeMixedPallets(MAX_SKU);          // 1차: SKU 7개 이하로 유지되는 병합만
+  mergeMixedPallets(ABSOLUTE_MAX_SKU); // 2차: 그래도 저충전 파레트가 남으면 10개까지는 합침 (10 초과 절대 금지)
+
+  // 4) 재배분(rebalance) 단계 (2026-07-15 추가): 위 병합은 "파레트 통째로 두 개를 합칠 수 있을 때만"
+  //    작동해서, 두 저충전 파레트를 합치면 SKU가 10개를 넘어버리는 경우엔 둘 다 낮은 충전률로 남아있었다
+  //    (예: 0.13 PLT/4SKU짜리와 0.24 PLT/10SKU짜리가 합치면 14SKU라 못 합쳐짐). 그래서 파레트를
+  //    통째로 합치는 대신 "낱개 상품(SKU) 단위"로 옮기거나 맞바꾼다:
+  //    4-1) 0.7 미만인 파레트의 물량을 다른 파레트의 남는 공간(SKU<10, fill<=0.8)으로 하나씩 옮긴다.
+  //    4-2) 그걸로 안 옮겨지면(대상 파레트가 이미 SKU 10개라 자리가 없는 경우 등) — 그 파레트에 있는
+  //    상품 하나를 골라 "빼고 그 자리에 이 상품을 넣는" 맞바꾸기를 시도한다(SKU 개수는 그대로라 10개
+  //    캡에 안 걸림, fill 캡만 지키면 됨). 사용자가 "합치지 말고, 이런 식으로 하나씩 빼고 넣어서
+  //    맞추면 되잖아"라고 직접 예시(PLT21에서 111691을 빼고 PLT19 물량을 넣는 식)를 줌 — 그 요청 반영.
+  //    완전히 비워진 파레트는 없앤다(파레트 수가 줄어듦). 마지막에 도저히 옮길 곳이 없는 자투리 하나
+  //    정도가 낮은 충전률로 남는 건 정상(사용자 확인).
+  const REBALANCE_TARGET = 0.7;
+  function rebalanceMixedPallets(){
+    for(let pass=0; pass<5; pass++){
+      let moved = false;
+      mixedPallets.sort((a,b)=> a.fill - b.fill);
+      for(let i=0;i<mixedPallets.length;i++){
+        const weak = mixedPallets[i];
+        if(weak.fill >= REBALANCE_TARGET) continue;
+        for(let idx=weak.items.length-1; idx>=0; idx--){
+          const item = weak.items[idx];
+          let bestPallet = null, bestAfter = -Infinity;
+          for(let j=0;j<mixedPallets.length;j++){
+            if(j===i) continue;
+            const target = mixedPallets[j];
+            if(target.items.length >= ABSOLUTE_MAX_SKU) continue;
+            const after = target.fill + item.occupancy;
+            if(after > HARD_CAP + 1e-9) continue;
+            if(after > bestAfter){ bestAfter = after; bestPallet = target; }
+          }
+          if(bestPallet){
+            bestPallet.items.push(item);
+            bestPallet.fill = Math.round((bestPallet.fill + item.occupancy)*10000)/10000;
+            weak.items.splice(idx,1);
+            weak.fill = Math.round((weak.fill - item.occupancy)*10000)/10000;
+            moved = true;
+            continue;
+          }
+          // 그냥 옮길 자리가 없으면(주로 대상 파레트가 이미 SKU 10개라서) 맞바꾸기를 시도한다.
+          // 이미 0.7 이상인(잘 채워진) 파레트하고만 맞바꾼다 — 약한 파레트끼리 맞바꿔봐야 의미가
+          // 없으므로. 그 안에서도 "이 약한 파레트에 가장 많이 보탬이 되는"(occupancy가 큰 상품을
+          // 빼오는) 조합을 고른다 — 사용자가 준 예시(잘 채워진 파레트에서 하나 빼고 약한 파레트
+          // 물량을 그 자리에 넣는 식)와 같은 방향.
+          let bestSwap = null;
+          for(let j=0;j<mixedPallets.length;j++){
+            if(j===i) continue;
+            const target = mixedPallets[j];
+            if(target.fill < REBALANCE_TARGET) continue;
+            for(let k=0;k<target.items.length;k++){
+              const t = target.items[k];
+              if(t.occupancy <= item.occupancy) continue;
+              const newTargetFill = Math.round((target.fill - t.occupancy + item.occupancy)*10000)/10000;
+              const newWeakFill = Math.round((weak.fill - item.occupancy + t.occupancy)*10000)/10000;
+              if(newTargetFill <= HARD_CAP + 1e-9 && newWeakFill <= HARD_CAP + 1e-9){
+                const gain = t.occupancy - item.occupancy;
+                if(!bestSwap || gain > bestSwap.gain) bestSwap = {j, k, gain};
+              }
+            }
+          }
+          if(bestSwap){
+            const target = mixedPallets[bestSwap.j];
+            const t = target.items[bestSwap.k];
+            target.items[bestSwap.k] = item;
+            target.fill = Math.round((target.fill - t.occupancy + item.occupancy)*10000)/10000;
+            weak.items[idx] = t;
+            weak.fill = Math.round((weak.fill - item.occupancy + t.occupancy)*10000)/10000;
+            moved = true;
+          }
+        }
+      }
+      mixedPallets = mixedPallets.filter(p=>p.items.length>0);
+      if(!moved) break;
+    }
+  }
+  rebalanceMixedPallets();
+  mergeMixedPallets(ABSOLUTE_MAX_SKU); // 재배분 후 비슷한 저충전 파레트가 새로 생겼을 수 있어 마지막으로 한 번 더 정리
 
   // 단일 아이템만 남은 mixed pallet은 '단일(잔여)'로 표기
   mixedPallets = mixedPallets.map(p=> ({...p, type: p.items.length>1 ? 'mixed' : 'leftover'}));
@@ -1028,6 +1113,11 @@ function renderResults(){
   document.getElementById('stat-mixed').textContent = pallets.filter(p=>p.type==='mixed'||p.type==='leftover').length;
   const totalFill = pallets.reduce((s,p)=>s+p.fill,0);
   document.getElementById('stat-totalfill').textContent = totalFill.toFixed(2);
+  document.getElementById('stat-minplt').textContent = Math.ceil(totalFill - 1e-9);
+  const totalBeforeFill = productAgg.reduce((s,a)=>s+a.totalOccupancy,0);
+  document.getElementById('stat-beforeplt').textContent = totalBeforeFill.toFixed(2);
+  const totalUnitsAll = productAgg.reduce((s,a)=>s+a.totalUnits,0);
+  document.getElementById('stat-totalunits').textContent = totalUnitsAll.toLocaleString();
 
   const list = document.getElementById('pallet-list');
   if(pallets.length===0){
