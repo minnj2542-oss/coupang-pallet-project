@@ -394,6 +394,7 @@ const GRID_COLS = ['vendor','code','name','b188','b88','unitsPerBox','boxQty','e
 const GRID_INITIAL_ROWS = 30;
 let shipGrid = [];  // 엑셀 붙여넣기용 스프레드시트 그리드. GRID_COLS 순서의 필드를 가진 행 배열 (문자열 상태 그대로 보관)
 let productAgg = [];
+let rawPltSum = 0; // 상차리스트에 입력된 PLT 원본값 그대로의 합계 (재적 마스터/단위 기준표 보정 전)
 let missingPltItems = []; // PLT가 0 이하/빈값이고 단위 기준표에도 없어 재적 불가능한 상품 목록
 let pallets = [];
 
@@ -832,6 +833,7 @@ function runCalculation(){
   if(shipment.length===0){ flash('상차리스트를 먼저 불러와주세요'); return; }
 
   missingPltItems = [];
+  rawPltSum = shipment.reduce((s,it)=> s + (parseNum(it.plt)||0), 0);
   const aggMap = {}; // code -> {code,name,b188,b88,totalUnits,totalOccupancy}
 
   const vendorNote = document.getElementById('result-vendor-note');
@@ -1114,8 +1116,7 @@ function renderResults(){
   const totalFill = pallets.reduce((s,p)=>s+p.fill,0);
   document.getElementById('stat-totalfill').textContent = totalFill.toFixed(2);
   document.getElementById('stat-minplt').textContent = Math.ceil(totalFill - 1e-9);
-  const totalBeforeFill = productAgg.reduce((s,a)=>s+a.totalOccupancy,0);
-  document.getElementById('stat-beforeplt').textContent = totalBeforeFill.toFixed(2);
+  document.getElementById('stat-beforeplt').textContent = rawPltSum.toFixed(2);
   const totalUnitsAll = productAgg.reduce((s,a)=>s+a.totalUnits,0);
   document.getElementById('stat-totalunits').textContent = totalUnitsAll.toLocaleString();
 
