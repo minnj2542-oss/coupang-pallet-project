@@ -116,6 +116,7 @@
   .pill-ok{ background:var(--success-bg); color:var(--success); }
   .pill-bad{ background:var(--danger-bg); color:var(--danger); }
   .pill-mix{ background:#EEF1FE; color:#4147C4; }
+  .pill-purple{ background:#F3E8FF; color:#7E22CE; }
   .pill-single{ background:var(--warn-bg); color:var(--accent-ink); }
 
   .stat-row{ display:flex; gap:14px; flex-wrap:wrap; margin-bottom:6px; }
@@ -695,9 +696,15 @@ document.addEventListener('paste', (e)=>{
   renderShipGrid();
 });
 
+// 상차리스트 다운로드 파일엔 맨 아래에 "합계행"(상품코드/거래처명 등은 비어있고 수량만 합산되어 있는 줄)이
+// 붙어있는 경우가 있어, 10개 열 중 하나라도 빈칸이면 그 행은 통째로 계산에서 제외한다.
+function isCompleteShipRow(r){
+  return GRID_COLS.every(col => (r[col]||'').toString().trim() !== '');
+}
+
 function importShipGrid(){
   fullShipment = shipGrid
-    .filter(r=> r.code && r.code.trim() && r.code.trim()!=='상품코드')
+    .filter(r=> isCompleteShipRow(r) && r.code.trim()!=='상품코드')
     .map(r=>({
       vendor:(r.vendor||'').trim(), code:r.code.trim(), name:(r.name||'').trim(),
       b188:(r.b188||'').trim(), b88:(r.b88||'').trim(),
@@ -753,12 +760,26 @@ function findUnitRefFor(item){
   return null;
 }
 
+function findMasterFor(item){
+  if(!item.code && !item.name) return null;
+  let m = master.find(r=> r.code && item.code && r.code===item.code);
+  if(m) return {row:m, via:'상품코드'};
+  m = master.find(r=> r.name && item.name && r.name.trim()===item.name.trim());
+  if(m) return {row:m, via:'상품명'};
+  return null;
+}
+
 // 상차리스트 한 줄에 대해 실제 계산에 쓸 PLT를 결정.
-// 원칙: 입력된 PLT(0보다 큰 정상값)는 기준값이라 절대 바꾸지 않고 그대로 사용한다.
-// 다만 PLT가 0/빈값/음수면(엑셀에서 반올림되며 소수점 정보가 날아간 경우 등) 재적이 통째로
-// 빠지는 게 가장 나쁘므로, 단위 기준표에 등록된 상품이면 박스수÷PLT당박스량으로 재적을 살려낸다.
-// (재적이 빠지지 않는 것을 최우선으로 한다 — 정상 PLT가 있는 경우엔 이 로직이 절대 개입하지 않음)
+// 우선순위 (2026-07-15 확정): 단위 기준표는 "우리 센터가 지금 쌓고 있는 방식" 기준이고,
+// 재적 마스터관리(쿠팡박스수)는 "쿠팡 납품을 위해 실제로 다시 쌓아야 하는 방식" 기준 — 그래서
+// 재적 마스터관리에 등록된 상품이면 그 쿠팡박스수로 PLT를 항상 다시 계산한다(입력 PLT가 정상값이어도
+// 덮어씀). 재적 마스터관리에 없는 상품만 기존 규칙(입력 PLT 우선, 0/빈값이면 단위 기준표로 복구) 적용.
 function resolveItemPlt(item){
+  const masterRef = findMasterFor(item);
+  const masterCpNum = masterRef ? cpBoxNum(masterRef.row.cpBox) : 0;
+  if(masterCpNum && item.boxQty > 0){
+    return { plt: item.boxQty / masterCpNum, filled:true };
+  }
   const inputPlt = parseNum(item.plt);
   if(!isNaN(inputPlt) && inputPlt > 0){
     return { plt: inputPlt };
@@ -770,7 +791,7 @@ function resolveItemPlt(item){
   }
   return { plt: null };
 }
-function fmtPlt(n){ return Number(n.toFixed(4)).toString(); }
+function fmtPlt(n){ return Number(n.toFixed(2)).toString(); }
 
 function renderShipment(){
   const wrap = document.getElementById('ship-preview-card');
@@ -783,7 +804,9 @@ function renderShipment(){
     const r = resolveItemPlt(it);
     const note = r.plt===null
       ? `<span class="pill pill-bad">PLT 없음</span>`
-      : `<span class="pill pill-ok">입력값 사용</span>`;
+      : (r.filled
+        ? `<span class="pill pill-purple">재적값 사용</span>`
+        : `<span class="pill pill-ok">입력값 사용</span>`);
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="mono">${esc(it.vendor)}</td>
@@ -833,13 +856,17 @@ function runCalculation(){
     const remainderOcc = Math.max(0, Math.round((occ - fullCount)*10000)/10000);
     // 총낱개는 절대 소수점이 나오면 안 되므로, 완충 파레트 1개당 낱개수를 정수로 고정하고
     // 잔여분은 "총낱개 - 완충파레트가 가져간 만큼"으로 역산해서 자투리 없이 정확히 맞춘다.
-    // PLT 값 자체는 절대 안 건드리고, "1PLT=몇 개"만 단위 기준표로 조용히 더 정밀하게 구한다
-    // (기준표에 있으면 PLT당박스량×박스당낱개수로 정확히, 없으면 총낱개÷occupancy를 반올림해서 근사).
+    // 완충파레트 1개당 박스수는 재적 마스터관리(쿠팡박스수)가 등록돼 있으면 그게 우선(실제 쿠팡
+    // 납품 기준), 없으면 단위 기준표의 PLT당박스량. 박스당 낱개수는 항상 단위 기준표에서 가져온다
+    // (재적 마스터관리엔 그 정보가 없음). 둘 다 없으면 총낱개÷occupancy를 반올림해서 근사.
+    const masterRef = findMasterFor(a);
+    const masterCpNum = masterRef ? cpBoxNum(masterRef.row.cpBox) : 0;
     const ref = findUnitRefFor(a);
     const refCpNum = ref ? cpBoxNum(ref.row.cpBox) : 0;
     const refUnitsPerBox = ref ? Number(ref.row.unitsPerBox) || 0 : 0;
-    const unitsPerFullPallet = (refCpNum && refUnitsPerBox)
-      ? refCpNum * refUnitsPerBox
+    const effectiveCpNum = masterCpNum || refCpNum;
+    const unitsPerFullPallet = (effectiveCpNum && refUnitsPerBox)
+      ? effectiveCpNum * refUnitsPerBox
       : (occ > 0 ? Math.round(a.totalUnits / occ) : 0);
     for(let i=0;i<fullCount;i++){
       singlePallets.push({
