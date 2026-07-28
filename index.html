@@ -368,7 +368,7 @@
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>상품코드</th><th>상품명</th><th>BOX바코드</th><th>상품바코드</th><th class="num">총낱개</th><th class="num">PLT 점유</th></tr></thead>
+            <thead><tr><th>상품코드</th><th>상품명</th><th>BOX바코드</th><th>상품바코드</th><th class="num">박스수</th><th class="num">총낱개</th><th class="num">PLT 점유</th></tr></thead>
             <tbody id="detail-tbody"></tbody>
           </table>
         </div>
@@ -844,9 +844,10 @@ function runCalculation(){
     const r = resolveItemPlt(it);
     if(r.plt===null){ missingPltItems.push(it); return; }
     const key = it.code || it.name;
-    if(!aggMap[key]) aggMap[key] = {code:it.code, name:it.name, b188:it.b188, b88:it.b88, totalUnits:0, totalOccupancy:0};
+    if(!aggMap[key]) aggMap[key] = {code:it.code, name:it.name, b188:it.b188, b88:it.b88, totalUnits:0, totalOccupancy:0, unitsPerBox:0};
     aggMap[key].totalUnits += it.totalUnits;
     aggMap[key].totalOccupancy += r.plt;
+    if(!aggMap[key].unitsPerBox && it.unitsPerBox) aggMap[key].unitsPerBox = it.unitsPerBox;
   });
 
   productAgg = Object.values(aggMap);
@@ -873,16 +874,23 @@ function runCalculation(){
     const unitsPerFullPallet = (effectiveCpNum && refUnitsPerBox)
       ? effectiveCpNum * refUnitsPerBox
       : (occ > 0 ? Math.round(a.totalUnits / occ) : 0);
+    const remainderUnits = Math.max(0, a.totalUnits - unitsPerFullPallet*fullCount);
+    // 박스수 표시는 단위 기준표의 박스당낱개수를 우선 쓰고, 등록 안 된 상품은 상차리스트에
+    // 직접 입력된 BOX입수 값으로 대신 계산한다 (둘 다 없으면 박스수 표시 불가 → '-').
+    const displayUnitsPerBox = refUnitsPerBox || a.unitsPerBox || 0;
+    const fullBoxes = displayUnitsPerBox ? Math.round(unitsPerFullPallet / displayUnitsPerBox) : null;
+    const remainderBoxes = displayUnitsPerBox ? Math.round(remainderUnits / displayUnitsPerBox) : null;
     for(let i=0;i<fullCount;i++){
       singlePallets.push({
         type:'single', fill:1,
-        items:[{code:a.code, name:a.name, b188:a.b188, b88:a.b88, units: unitsPerFullPallet}]
+        items:[{code:a.code, name:a.name, b188:a.b188, b88:a.b88, units: unitsPerFullPallet, boxes: fullBoxes}]
       });
     }
     if(remainderOcc > 1e-6){
       remainderPool.push({
         code:a.code, name:a.name, b188:a.b188, b88:a.b88,
-        units: Math.max(0, a.totalUnits - unitsPerFullPallet*fullCount),
+        units: remainderUnits,
+        boxes: remainderBoxes,
         occupancy: remainderOcc
       });
     }
@@ -1154,6 +1162,7 @@ function openPalletDetail(idx){
   document.getElementById('detail-fill').innerHTML = `${p.fill.toFixed(2)}<span style="font-size:12px; color:var(--ink-soft); font-weight:500;"> PLT</span>`;
   document.getElementById('detail-tbody').innerHTML = p.items.map(it=>`<tr><td class="mono">${esc(it.code)}</td><td>${esc(it.name)}</td>
     <td class="mono">${esc(it.b188)}</td><td class="mono">${esc(it.b88)}</td>
+    <td class="num mono">${it.boxes!=null ? it.boxes : '-'}</td>
     <td class="num mono">${Math.round(it.units)}</td>
     <td class="num mono">${(it.occupancy!==undefined ? it.occupancy : 1).toFixed(2)}</td></tr>`).join('');
   document.getElementById('detail-position').textContent = `${idx+1} / ${pallets.length}`;
