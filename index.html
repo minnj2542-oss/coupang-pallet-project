@@ -647,6 +647,7 @@ function showInputView(){
   document.getElementById('calc-vendor-view').style.display='none';
   document.getElementById('calc-results-view').style.display='none';
   document.getElementById('calc-detail-view').style.display='none';
+  recordNav();
 }
 function showVendorView(){
   document.getElementById('calc-input-view').style.display='none';
@@ -654,6 +655,7 @@ function showVendorView(){
   document.getElementById('calc-results-view').style.display='none';
   document.getElementById('calc-detail-view').style.display='none';
   window.scrollTo({top:0, behavior:'auto'});
+  recordNav();
 }
 function showResultsView(){
   document.getElementById('calc-input-view').style.display='none';
@@ -662,6 +664,7 @@ function showResultsView(){
   document.getElementById('calc-detail-view').style.display='none';
   document.getElementById('results-back-btn').textContent = allVendors.length>1 ? '← 거래처 선택으로 돌아가기' : '← 입력으로 돌아가기';
   window.scrollTo({top:0, behavior:'auto'});
+  recordNav();
 }
 // 결과(파레트 목록) 화면의 뒤로가기: 거래처가 여러 개였던 세션이면 거래처 선택 화면으로,
 // 단일 거래처였으면 그냥 입력 화면으로 돌아간다.
@@ -689,6 +692,47 @@ document.addEventListener('input', (e)=>{
   if(t.matches('#ship-grid-tbody input')){
     shipGrid[Number(t.dataset.row)][t.dataset.col] = t.value;
   }
+});
+
+// Ctrl+Z/Ctrl+Y(맥은 Cmd+Z/Cmd+Shift+Z)로 계산 화면 단계(입력↔거래처선택↔결과↔상세)를
+// 키보드만으로 뒤로/앞으로 이동. 화면이 바뀔 때마다 아래 recordNav()가 기록을 남기고,
+// Z/Y는 그 기록을 따라 이동만 한다(브라우저 뒤로/앞으로가기와 비슷한 방식).
+// 입력 칸(그리드 셀/텍스트박스)에 포커스가 있을 땐 원래 브라우저의 "입력 취소" 동작을
+// 건드리지 않도록 이때는 개입하지 않는다 (2026-07-15, 사용자 요청).
+let navHistory = [];
+let navIndex = -1;
+let navReplaying = false;
+function currentNavState(){
+  if(document.getElementById('calc-detail-view').style.display !== 'none') return {view:'detail', detailIdx: currentDetailIdx};
+  if(document.getElementById('calc-results-view').style.display !== 'none') return {view:'results'};
+  if(document.getElementById('calc-vendor-view').style.display !== 'none') return {view:'vendor'};
+  return {view:'input'};
+}
+function recordNav(){
+  if(navReplaying) return;
+  const state = currentNavState();
+  const top = navHistory[navIndex];
+  if(top && top.view===state.view && top.detailIdx===state.detailIdx) return;
+  navHistory = navHistory.slice(0, navIndex+1);
+  navHistory.push(state);
+  navIndex = navHistory.length-1;
+}
+function applyNavState(state){
+  navReplaying = true;
+  if(state.view==='input') showInputView();
+  else if(state.view==='vendor'){ renderVendorList(allVendors); showVendorView(); }
+  else if(state.view==='results') showResultsView();
+  else if(state.view==='detail') openPalletDetail(state.detailIdx);
+  navReplaying = false;
+}
+document.addEventListener('keydown', (e)=>{
+  const isZ = (e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase()==='z';
+  const isY = (e.ctrlKey || e.metaKey) && (e.key.toLowerCase()==='y' || (e.shiftKey && e.key.toLowerCase()==='z'));
+  if(!isZ && !isY) return;
+  const active = document.activeElement;
+  if(active && (active.tagName==='INPUT' || active.tagName==='TEXTAREA' || active.isContentEditable)) return;
+  if(isZ && navIndex>0){ e.preventDefault(); navIndex--; applyNavState(navHistory[navIndex]); }
+  else if(isY && navIndex<navHistory.length-1){ e.preventDefault(); navIndex++; applyNavState(navHistory[navIndex]); }
 });
 
 // 엑셀에서 복사한 여러 셀을 붙여넣으면 현재 칸부터 채워나간다 (필요시 행 자동 추가)
@@ -734,6 +778,7 @@ function importShipGrid(){
   if(fullShipment.length===0){ flash('불러올 데이터가 없습니다. 표에 값을 채워주세요'); return; }
 
   completedVendors = new Set(); // 새로 불러오면 완료 표시 초기화
+  navHistory = []; navIndex = -1; // 새로 불러오면 Ctrl+Z/Y 이동 기록도 초기화
   const vendors = [...new Set(fullShipment.map(r=>r.vendor).filter(v=>v))];
   allVendors = vendors;
   if(vendors.length > 1){
@@ -775,6 +820,9 @@ function renderVendorList(vendors){
 }
 function selectVendor(vendor){
   shipment = fullShipment.filter(r=>r.vendor===vendor);
+  // 거래처가 바뀌면 Ctrl+Z/Y 이동 기록도 초기화한다 — 그래야 다른 거래처였던 시점으로
+  // 되돌아가서 화면과 데이터(pallets)가 안 맞는 상황이 생기지 않는다.
+  navHistory = []; navIndex = -1;
   showInputView();
   renderShipment();
   flash(`${vendor} 거래처 ${shipment.length}건 불러옴`);
@@ -1204,6 +1252,7 @@ function openPalletDetail(idx){
   document.getElementById('calc-results-view').style.display='none';
   document.getElementById('calc-detail-view').style.display='block';
   window.scrollTo({top:0, behavior:'auto'});
+  recordNav();
 }
 // 마지막 파레트에서 "완료" 클릭 시: 이 거래처를 완료 처리하고, 남은 거래처가 있으면
 // 입력 화면을 거치지 않고 바로 그 거래처의 파레트 목록(결과) 화면으로 자동 진입한다
@@ -1231,6 +1280,7 @@ function closePalletDetail(){
     const row = document.querySelector(`.pallet-row[data-idx="${currentDetailIdx}"]`);
     if(row) row.scrollIntoView({behavior:'auto', block:'center'});
   }
+  recordNav();
 }
 
 /* ---------------- init ---------------- */
