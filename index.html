@@ -320,7 +320,7 @@
     <!-- ===== 결과 화면 (계산하면 위 입력 화면 대신 이게 뜸) ===== -->
     <div id="calc-results-view" style="display:none;">
       <div class="row" style="margin-bottom:16px;">
-        <button class="btn btn-ghost btn-sm" onclick="showInputView()">← 입력으로 돌아가기</button>
+        <button class="btn btn-ghost btn-sm" id="results-back-btn" onclick="goBackFromResults()">← 입력으로 돌아가기</button>
         <span class="toolbar-right note" id="result-vendor-note"></span>
       </div>
 
@@ -355,8 +355,10 @@
           <button class="btn btn-ghost btn-sm" id="detail-prev-btn" onclick="detailPrev()">← 이전 파레트</button>
           <span class="note" id="detail-position" style="align-self:center; min-width:52px; text-align:center;"></span>
           <button class="btn btn-ghost btn-sm" id="detail-next-btn" onclick="detailNext()">다음 파레트 →</button>
+          <button class="btn btn-dark btn-sm" id="detail-complete-btn" onclick="completeVendorAndAdvance()" style="display:none;">완료</button>
         </div>
       </div>
+      <div class="note" id="detail-vendor-note" style="margin-bottom:10px; font-weight:600;"></div>
       <div class="card">
         <div class="detail-header">
           <div class="stack" id="detail-stack"></div>
@@ -389,6 +391,8 @@ const UNITREF_KEY = 'unit-reference-list';
 let unitRef = [];  // {id, code, name, cpBox, unitsPerBox}  전 상품 단위 기준표. cpBox=PLT당 박스량, unitsPerBox=박스당 낱개수. resolveItemPlt에서 정밀 PLT 역산에 사용.
 let fullShipment = []; // 거래처 필터링 전, 그리드에서 불러온 전체 상차리스트
 let shipment = [];  // {vendor, code, name, b188, b88, unitsPerBox, boxQty, eaExtra, totalUnits, plt}
+let allVendors = []; // 여러 거래처가 섞여 있을 때, 거래처 선택 화면에 뜨는 전체 거래처 목록
+let completedVendors = new Set(); // "완료" 버튼을 누른 거래처 이름들 — 거래처 선택 화면에서 비활성화 처리
                     // unitsPerBox=BOX입수, boxQty=BOX(박스수), eaExtra=EA(항상 0에 가까움, 미사용), totalUnits=총낱개(항상 정수), plt=입력된 PLT값
 const GRID_COLS = ['vendor','code','name','b188','b88','unitsPerBox','boxQty','eaExtra','totalUnits','plt'];
 const GRID_INITIAL_ROWS = 30;
@@ -656,7 +660,18 @@ function showResultsView(){
   document.getElementById('calc-vendor-view').style.display='none';
   document.getElementById('calc-results-view').style.display='block';
   document.getElementById('calc-detail-view').style.display='none';
+  document.getElementById('results-back-btn').textContent = allVendors.length>1 ? '← 거래처 선택으로 돌아가기' : '← 입력으로 돌아가기';
   window.scrollTo({top:0, behavior:'auto'});
+}
+// 결과(파레트 목록) 화면의 뒤로가기: 거래처가 여러 개였던 세션이면 거래처 선택 화면으로,
+// 단일 거래처였으면 그냥 입력 화면으로 돌아간다.
+function goBackFromResults(){
+  if(allVendors.length > 1){
+    renderVendorList(allVendors);
+    showVendorView();
+  } else {
+    showInputView();
+  }
 }
 
 function renderShipGrid(){
@@ -718,7 +733,9 @@ function importShipGrid(){
     }));
   if(fullShipment.length===0){ flash('불러올 데이터가 없습니다. 표에 값을 채워주세요'); return; }
 
+  completedVendors = new Set(); // 새로 불러오면 완료 표시 초기화
   const vendors = [...new Set(fullShipment.map(r=>r.vendor).filter(v=>v))];
+  allVendors = vendors;
   if(vendors.length > 1){
     renderVendorList(vendors);
     showVendorView();
@@ -734,6 +751,17 @@ function renderVendorList(vendors){
   const list = document.getElementById('vendor-list');
   list.innerHTML = vendors.map(v=>{
     const count = fullShipment.filter(r=>r.vendor===v).length;
+    const done = completedVendors.has(v);
+    if(done){
+      return `
+        <div class="pallet-row" style="opacity:0.5; cursor:default;">
+          <div class="pallet-info">
+            <div class="id disp">${esc(v)}</div>
+            <div class="meta">${count}건 · <span class="pill pill-ok">완료</span></div>
+          </div>
+        </div>
+      `;
+    }
     return `
       <div class="pallet-row" onclick="selectVendor('${v.replace(/'/g,"\\'")}')">
         <div class="pallet-info">
@@ -1160,17 +1188,39 @@ function openPalletDetail(idx){
   document.getElementById('detail-title').textContent = `PLT ${idx+1}`;
   document.getElementById('detail-meta').innerHTML = `<span class="pill ${pillClass}">${typeLabel}</span> · SKU ${p.items.length}개`;
   document.getElementById('detail-fill').innerHTML = `${p.fill.toFixed(2)}<span style="font-size:12px; color:var(--ink-soft); font-weight:500;"> PLT</span>`;
+  const currentVendor = shipment.length ? shipment[0].vendor : '';
+  document.getElementById('detail-vendor-note').textContent = currentVendor ? `거래처: ${currentVendor}` : '';
   document.getElementById('detail-tbody').innerHTML = p.items.map(it=>`<tr><td class="mono">${esc(it.code)}</td><td>${esc(it.name)}</td>
-    <td class="mono">${esc(it.b188)}</td><td class="mono">${esc(it.b88)}</td>
+    <td class="mono">${esc(last5(it.b188))}</td><td class="mono">${esc(last5(it.b88))}</td>
     <td class="num mono">${it.boxes!=null ? it.boxes : '-'}</td>
     <td class="num mono">${Math.round(it.units)}</td>
     <td class="num mono">${(it.occupancy!==undefined ? it.occupancy : 1).toFixed(2)}</td></tr>`).join('');
   document.getElementById('detail-position').textContent = `${idx+1} / ${pallets.length}`;
   document.getElementById('detail-prev-btn').disabled = idx<=0;
-  document.getElementById('detail-next-btn').disabled = idx>=pallets.length-1;
+  const isLast = idx>=pallets.length-1;
+  document.getElementById('detail-next-btn').disabled = isLast;
+  document.getElementById('detail-next-btn').style.display = isLast ? 'none' : '';
+  document.getElementById('detail-complete-btn').style.display = isLast ? '' : 'none';
   document.getElementById('calc-results-view').style.display='none';
   document.getElementById('calc-detail-view').style.display='block';
   window.scrollTo({top:0, behavior:'auto'});
+}
+// 마지막 파레트에서 "완료" 클릭 시: 이 거래처를 완료 처리하고, 남은 거래처가 있으면
+// 입력 화면을 거치지 않고 바로 그 거래처의 파레트 목록(결과) 화면으로 자동 진입한다
+// (파레트 1번 상세로 바로 들어가지 않고, 전체 목록부터 보여줌 — 2026-07-15 사용자 피드백).
+function completeVendorAndAdvance(){
+  const currentVendor = shipment.length ? shipment[0].vendor : '';
+  if(currentVendor) completedVendors.add(currentVendor);
+  const next = allVendors.find(v => v!==currentVendor && !completedVendors.has(v));
+  if(next){
+    selectVendor(next);
+    runCalculation();
+    flash(`${currentVendor} 완료 · ${next} 거래처로 이동`);
+  } else {
+    renderVendorList(allVendors);
+    showVendorView();
+    flash(allVendors.length ? '모든 거래처 완료!' : `${currentVendor} 완료`);
+  }
 }
 function detailPrev(){ if(currentDetailIdx>0) openPalletDetail(currentDetailIdx-1); }
 function detailNext(){ if(currentDetailIdx<pallets.length-1) openPalletDetail(currentDetailIdx+1); }
