@@ -973,10 +973,21 @@ function runCalculation(){
   });
 
   const HARD_CAP = 0.8, MAX_SKU = 7, ABSOLUTE_MAX_SKU = 10, SMALL_THRESHOLD = 0.1;
+  let mixedPallets = [];
+
+  // XRC 거래처(쿠팡 창고)는 혼적 자체가 금지 — 1PLT엔 1SKU만 담아야 해서, 자투리 하나하나가
+  // 그대로 각자 파레트가 된다(다른 상품과 절대 안 섞음). 2026-07-15 사용자 요청.
+  const currentVendorName = shipment.length ? shipment[0].vendor : '';
+  const isXRC = currentVendorName.includes('XRC');
+
+  if(isXRC){
+    remainderPool.forEach(item=>{
+      mixedPallets.push({type:'leftover', fill:item.occupancy, items:[item]});
+    });
+  } else {
+
   const bigItems = remainderPool.filter(it=>it.occupancy >= SMALL_THRESHOLD).sort((x,y)=> y.occupancy - x.occupancy);
   const smallItems = remainderPool.filter(it=>it.occupancy < SMALL_THRESHOLD).sort((x,y)=> y.occupancy - x.occupancy);
-
-  let mixedPallets = [];
 
   // 1) 큰 자투리(0.1 이상)는 Best-Fit-Decreasing: "들어갈 수 있는 파레트 중 가장 꽉 채워지는(남는 공간이 가장 적은)" 곳에 넣는다.
   // 다양한 SKU를 최대한 섞어서 파레트 수 자체를 줄이는 게 우선이라, 배치 단계부터 진짜 하드캡인
@@ -1147,6 +1158,8 @@ function runCalculation(){
   }
   rebalanceMixedPallets();
   mergeMixedPallets(ABSOLUTE_MAX_SKU); // 재배분 후 비슷한 저충전 파레트가 새로 생겼을 수 있어 마지막으로 한 번 더 정리
+
+  } // isXRC 분기 끝
 
   // 단일 아이템만 남은 mixed pallet은 '단일(잔여)'로 표기
   mixedPallets = mixedPallets.map(p=> ({...p, type: p.items.length>1 ? 'mixed' : 'leftover'}));
