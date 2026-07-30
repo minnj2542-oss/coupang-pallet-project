@@ -975,12 +975,13 @@ function runCalculation(){
   const HARD_CAP = 0.8, MAX_SKU = 7, ABSOLUTE_MAX_SKU = 10, SMALL_THRESHOLD = 0.1;
   let mixedPallets = [];
 
-  // XRC 거래처(쿠팡 창고)는 혼적 자체가 금지 — 1PLT엔 1SKU만 담아야 해서, 자투리 하나하나가
-  // 그대로 각자 파레트가 된다(다른 상품과 절대 안 섞음). 2026-07-15 사용자 요청.
+  // 거래처명에 "RC"가 들어간 곳(쿠팡 창고류)은 혼적 자체가 금지 — 1PLT엔 1SKU만 담아야 해서,
+  // 자투리 하나하나가 그대로 각자 파레트가 된다(다른 상품과 절대 안 섞음). 2026-07-15 사용자 요청,
+  // 조건을 "XRC"에서 "RC"로 확장(같은 날 추가 요청).
   const currentVendorName = shipment.length ? shipment[0].vendor : '';
-  const isXRC = currentVendorName.includes('XRC');
+  const isNoMixVendor = currentVendorName.includes('RC');
 
-  if(isXRC){
+  if(isNoMixVendor){
     remainderPool.forEach(item=>{
       mixedPallets.push({type:'leftover', fill:item.occupancy, items:[item]});
     });
@@ -1159,7 +1160,7 @@ function runCalculation(){
   rebalanceMixedPallets();
   mergeMixedPallets(ABSOLUTE_MAX_SKU); // 재배분 후 비슷한 저충전 파레트가 새로 생겼을 수 있어 마지막으로 한 번 더 정리
 
-  } // isXRC 분기 끝
+  } // isNoMixVendor 분기 끝
 
   // 단일 아이템만 남은 mixed pallet은 '단일(잔여)'로 표기
   mixedPallets = mixedPallets.map(p=> ({...p, type: p.items.length>1 ? 'mixed' : 'leftover'}));
